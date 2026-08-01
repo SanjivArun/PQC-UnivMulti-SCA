@@ -45,6 +45,7 @@
 .thumb
 
 .func starttrigger
+.thumb_func
 .global starttrigger
 
 starttrigger:
@@ -61,6 +62,7 @@ bx lr
 .endfunc
 
 .func endtrigger
+.thumb_func
 .global endtrigger
 
 endtrigger:
@@ -77,6 +79,7 @@ bx lr
 .endfunc
 
 .func readbyte
+.thumb_func
 .global readbyte
 
 readbyte:
@@ -92,6 +95,7 @@ bx lr
 .endfunc
 
 .func LoadN
+.thumb_func
 .global LoadN
 
 LoadN:
@@ -109,6 +113,7 @@ bx lr
 .endfunc
 
 .func randbyte
+.thumb_func
 .global randbyte
 
 randbyte:
@@ -126,6 +131,7 @@ bx lr
 .endfunc
 
 .func getstart
+.thumb_func
 .global getstart
 
 getstart:
@@ -144,6 +150,7 @@ bx lr
 
 
 .func getruncount
+.thumb_func
 .global getruncount
 
 getruncount:
@@ -163,6 +170,7 @@ bx lr
 
 
 .func printbyte
+.thumb_func
 .global printbyte
 
 printbyte:
@@ -177,6 +185,7 @@ bx lr
 .endfunc
 
 .func endprogram
+.thumb_func
 .global endprogram
 
 endprogram:
@@ -192,6 +201,7 @@ bx lr
 .endfunc
 
 .func initialisemaskflow
+.thumb_func
 .global initialisemaskflow
 
 # Takes address of key as input (r0)
@@ -208,6 +218,7 @@ bx lr
 .endfunc
 
 .func resetmaskflow
+.thumb_func
 .global resetmaskflow
 
 resetmaskflow:
@@ -224,6 +235,7 @@ bx lr
 .endfunc
 
 .func setmaskflowstart
+.thumb_func
 .global setmaskflowstart
 
 # Takes r0 as start number
@@ -241,6 +253,7 @@ bx lr
 .endfunc
 
 .func resetdatafile
+.thumb_func
 .global resetdatafile
 
 resetdatafile:

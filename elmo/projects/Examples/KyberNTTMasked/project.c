@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 #include "elmoasmfunctionsdef-extension.h"
 
@@ -13,11 +14,12 @@
 
 #include "polyvec.h"
 #include "params.h"
+#include "reduce.h"
 
 int main(void) {
   uint16_t num_challenge, nb_challenges;
   int j, k;
-  polyvec skpv;
+  polyvec skpv, s0, s1;
 
   read2bytes(&nb_challenges);
   for(num_challenge=0; num_challenge<nb_challenges; num_challenge++) {
@@ -27,11 +29,39 @@ int main(void) {
       for(k=0;k<KYBER_N;k++)
         read2bytes((uint16_t*) &skpv.vec[j].coeffs[k]);
 
+    // MASKED VERSION (the original unmasked body is kept below in comments):
+    //
+    // Original code:
+    //   starttrigger(); // To start a new trace
+    //   // Do the leaking operations here...
+    //   polyvec_ntt(&skpv);
+    //   endtrigger(); // To end the current trace
+    //
+    // Masking: split s into two shares s0, s1 with s = s0 + s1 (mod q).
+    // s0 is random, s1 is derived. The split happens BEFORE starttrigger()
+    // so that the true secret s never appears inside the recorded trace.
+    for(j=0;j<KYBER_K;j++)
+      for(k=0;k<KYBER_N;k++) {
+        rand2bytes((uint16_t*) &s0.vec[j].coeffs[k]);
+        s0.vec[j].coeffs[k] = barrett_reduce(s0.vec[j].coeffs[k]); /* s0 in [0, q] */
+        s1.vec[j].coeffs[k] = (int16_t)(skpv.vec[j].coeffs[k] - s0.vec[j].coeffs[k]);
+        while(s1.vec[j].coeffs[k] < 0)
+          s1.vec[j].coeffs[k] += KYBER_Q; /* s1 in [0, q] */
+      }
+
     starttrigger(); // To start a new trace
 
-    // Do the leaking operations here...
-    polyvec_ntt(&skpv);
-    
+    // Leaking operations... now only on the random-looking shares.
+    // NTT is linear over Z_q: NTT(s) = NTT(s0) + NTT(s1).
+    polyvec_ntt(&s0);
+    polyvec_ntt(&s1);
+
+    // Recombine the two shares (mod q)
+    for(j=0;j<KYBER_K;j++)
+      for(k=0;k<KYBER_N;k++)
+        skpv.vec[j].coeffs[k] = barrett_reduce(
+            (int16_t)(s0.vec[j].coeffs[k] + s1.vec[j].coeffs[k]));
+
     endtrigger(); // To end the current trace
 
     // Print the results of the computation
