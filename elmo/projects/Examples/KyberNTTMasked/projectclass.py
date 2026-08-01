@@ -7,10 +7,14 @@
 ###  - get_simulation(repository, classname=None)
 ###  - get_simulation_via_classname(classname)
 
-class KyberNTTSimulation(SimulationProject):
+class KyberNTTMaskedSimulation(SimulationProject):
+    """ Masked version of the KyberNTT example.
+    The secret vector s is split into 2 shares (s = s0 + s1 mod q) inside the
+    C code, before the trace window, so the power trace only leaks the shares.
+    The printed NTT result is the recombined NTT(s). """
     KYBER_K = 2 #k=2 for Kyber512
     KYBER_N = 256 #n=256 for Kyber512
-    
+
     @classmethod
     def get_binary_path(cl):
         return 'project.bin'
@@ -32,7 +36,7 @@ class KyberNTTSimulation(SimulationProject):
         for j in range(self.KYBER_K):
             for k in range(self.KYBER_N):
                 write(input, secret[j,k])
-                
+
     def get_test_challenges(self):
         import numpy as np
         just_ones = np.ones((self.KYBER_K, self.KYBER_N), dtype=int)
@@ -41,7 +45,7 @@ class KyberNTTSimulation(SimulationProject):
              1 * just_ones,
             -2 * just_ones,
         ]
-        
+
     def get_random_challenges(self, nb_challenges=5):
         import numpy as np
         return [ np.random.choice(
