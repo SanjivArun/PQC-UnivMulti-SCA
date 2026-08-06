@@ -64,11 +64,14 @@ for each challenge:
     // Leaking operations now only involve the shares:
     polyvec_ntt(&s0);
     polyvec_ntt(&s1);
-    // Recombine: NTT(s) = NTT(s_0) + NTT(s_1) (mod q)
+    endtrigger();
+
+    // Recombine AFTER the trace window closes: writing the true NTT(s) =
+    // NTT(s_0) + NTT(s_1) (mod q) inside the window would re-expose the
+    // secret to the leaked trace (this was the leak found in Task 5).
     for each coefficient (j, k):
         skpv.vec[j].coeffs[k] = barrett_reduce(
             (int16_t)(s0.vec[j].coeffs[k] + s1.vec[j].coeffs[k]));
-    endtrigger();
 
     // Print the (recombined) results, same as unmasked, outside the trace window
     print2bytes(&skpv.vec[j].coeffs[k]);                       // for all j, k

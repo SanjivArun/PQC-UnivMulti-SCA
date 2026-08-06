@@ -170,6 +170,17 @@ engine.reset_points() # Reset the engine to study other points
 
 Since the [ELMO project](https://github.com/sca-research/ELMO) takes its inputs and outputs from files, _Python-ELMO_ **can not** manage simultaneous runs.
 
+## Masked KyberNTT (side-channel study)
+
+`elmo/projects/Examples/KyberNTTMasked/` is a masking study of the same NTT example. It
+splits the secret into two random shares, NTTs each share, and recombines the results
+mod q *after* the recorded trace window closes, so the true NTT(s) never appears in the
+leaked power trace. A defense verification, `verify_masking.py`, checks both correctness
+(printed output equals the unmasked example mod q) and leakage (CPA correlation of the
+power traces with the secret's Hamming weight). See `HOW_TO_RUN_KYBER_NTT.md` sections 6
+and 7, and `docs/superpowers/plans/2026-07-31-masked-kyber-ntt.md` for the design and
+verification methodology.
+
 ## Licences
 
 [MIT](LICENCE.txt)

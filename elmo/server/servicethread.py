@@ -79,6 +79,8 @@ class ListeningThread(PermanentServiceThread):
                     break
             except socket.timeout:
                 pass
+            except (ConnectionAbortedError, OSError):
+                pass
 
         print('[port][%s] Stop listening' % self.port)
 
@@ -86,4 +88,4 @@ class ListeningThread(PermanentServiceThread):
         super().stop()
         clientsocker = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         clientsocker.connect((self.hostname, self.port))
-        self.tcpsock.close()
+        clientsocker.close()

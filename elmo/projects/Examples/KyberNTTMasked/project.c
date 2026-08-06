@@ -56,13 +56,14 @@ int main(void) {
     polyvec_ntt(&s0);
     polyvec_ntt(&s1);
 
-    // Recombine the two shares (mod q)
+    endtrigger(); // To end the current trace
+
+    // Recombine the two shares (mod q) OUTSIDE the recorded trace:
+    // writing the true NTT(s) inside starttrigger()/endtrigger() would leak it.
     for(j=0;j<KYBER_K;j++)
       for(k=0;k<KYBER_N;k++)
         skpv.vec[j].coeffs[k] = barrett_reduce(
             (int16_t)(s0.vec[j].coeffs[k] + s1.vec[j].coeffs[k]));
-
-    endtrigger(); // To end the current trace
 
     // Print the results of the computation
     for(j=0;j<KYBER_K;j++)

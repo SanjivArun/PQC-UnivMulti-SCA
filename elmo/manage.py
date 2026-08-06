@@ -209,25 +209,20 @@ def execute_simulation(project):
         leaking_binary_path,
     )
     process = subprocess.Popen(command, shell=True,
-        cwd=elmo_path, executable='/bin/bash',
+        cwd=elmo_path,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
     
-    # Follow the generation
-    output, error = b'', b''
-    num_trace = 0
-    while True:
-        output_line = process.stdout.readline()
-        error_line = process.stderr.readline()
-        if (not output_line) and (not error_line) and (process.poll() is not None):
-            break
-        if  error_line:
-            error += error_line
-        if output_line:
-            output += output_line
-            if 'TRACE NO' in output_line.decode(ELMO_OUTPUT_ENCODING):
-                num_trace += 1
-    return_code = process.poll()
+    # Use communicate() to avoid pipe-buffer deadlock:
+    # When the child blocks on a full pipe buffer (64KB on macOS),
+    # a manual readline() loop would deadlock because neither the
+    # child's write nor the parent's read can make progress.
+    # communicate() handles reading both pipes without blocking.
+    raw_out, raw_err = process.communicate()
+    output = raw_out or b''
+    error = raw_err or b''
+    num_trace = raw_out.count(b'TRACE NO') if raw_out else 0
+    return_code = process.returncode
     
     # Treat data
     output = output.decode(ELMO_OUTPUT_ENCODING) if output else None
