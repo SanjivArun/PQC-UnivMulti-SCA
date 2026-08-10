@@ -290,13 +290,24 @@ def print_joint_leak_audit(masked_result, inject_meta, args):
         print("  ...")
 
     multi_detected = sum(1 for m in window_metrics if m["flagged"])
+
+    # Count leaking features ONLY within injected windows (for the univariate test)
+    inject_threshold = tvla.DEFAULT_TVLA_THRESHOLD
+    t_stats = masked_result["t_stats"]
+    n_injected_features = n_injected * features_per_window
+    uni_detected_injected = 0
+    for w in inject_indices:
+        w = int(w)
+        w_start = w * features_per_window
+        w_end = w_start + features_per_window
+        leaked_in_window = np.count_nonzero(np.abs(t_stats[w_start:w_end]) > inject_threshold)
+        uni_detected_injected += leaked_in_window
     print("-" * 120)
     print("  summary:")
-    print("    injected windows                    = {}".format(n_injected))
-    print("    univariate detected (of {})         = {}   (target: noise floor)".format(n_injected, masked_result["univariate"]))
-    print("    multivariate detected (of {})        = {}".format(n_injected, multi_detected))
-    print("    leakage clearly missed by Welch     = {}   <- multivariate strictly stronger".format(
-        max(0, multi_detected)))
+    print("    injected windows                  = {}".format(n_injected))
+    print("    injected features                 = {}".format(n_injected_features))
+    print("    univariate detected (of {})       = {}   (target: noise floor)".format(n_injected_features, uni_detected_injected))
+    print("    multivariate detected (of {})     = {} windows".format(n_injected, multi_detected))
     print("=" * 120)
 
 
@@ -378,6 +389,75 @@ def _make_summary_figure(results, args):
     return fig
 
 
+def _make_table_figure(results, args):
+    """Save a compact table summarising leakage detection results.
+
+    4 rows: unmasked/masked × univariate/multivariate.
+    Columns: Implementation, Method, Statistical Test, Threshold, Detected Leakage.
+    """
+    import matplotlib.pyplot as plt
+    from matplotlib.font_manager import FontProperties
+
+    threshold = tvla.DEFAULT_TVLA_THRESHOLD
+    alpha = tvla.DEFAULT_ALPHA
+    order2 = args.order == 2
+
+    rows_data = []
+    for name, r in results.items():
+        # Univariate row
+        uni_label = "Welch's t-test"
+        uni_thresh = "|t| > {:.2f}".format(threshold)
+        uni_leak = "{:,} features".format(r["univariate"])
+        method = "Univariate"
+        rows_data.append((name, method, uni_label, uni_thresh, uni_leak))
+
+        # Multivariate row
+        mv_label = "Hotelling's T\u00b2"
+        nu = 2 * args.nb_fixed - (args.window_size if not order2 else (args.second_order_window_size * (args.second_order_window_size + 1) // 2)) - 1
+        nu = max(nu, 1)
+        d = args.second_order_window_size * (args.second_order_window_size + 1) // 2 if order2 else args.window_size
+        alpha_str = "{:.3e}".format(alpha)
+        mv_thresh = "\u03b1 = {}".format(alpha_str)
+        mv_leak = "{:,} windows (of {:,})".format(r["multivariate"], r["n_windows"])
+        method = "Multivariate"
+        rows_data.append((name, method, mv_label, mv_thresh, mv_leak))
+
+    col_labels = ["Implementation", "Method", "Statistical Test", "Threshold", "Detected Leakage"]
+    num_rows = len(rows_data) + 1
+    row_colors = ["#f5f5f5", "#ffffff"] * 10
+
+    grid = [col_labels] + [[cell for cell in row] for row in rows_data]
+
+    fig, ax = plt.subplots(figsize=(10, 3))
+    ax.axis("off")
+
+    col_widths = [0.14, 0.14, 0.22, 0.18, 0.32]
+    table = ax.table(cellText=grid, cellLoc="center", colWidths=col_widths, loc="center")
+    table.auto_set_font_size(False)
+
+    cell_h = 0.16
+    bold_font = FontProperties(weight="bold")
+    normal_font = FontProperties()
+    for (r, c), cell in table.get_celld().items():
+        cell.set_height(cell_h)
+        cell.set_text_props(fontproperties=normal_font, fontsize=9)
+        if r == 0:
+            cell.set_text_props(fontproperties=bold_font, fontsize=9.5, color="white")
+            cell.set_facecolor("#2c3e50")
+            cell.set_height(cell_h * 1.15)
+        else:
+            cell.set_facecolor(row_colors[r - 1])
+            if c == 0:
+                cell.set_text_props(fontweight="bold")
+            if c == 4:
+                cell.set_text_props(fontweight="bold")
+        cell.set_edgecolor("#cccccc")
+        cell.set_linewidth(0.5)
+
+    fig.subplots_adjust(left=0.04, right=0.96, top=0.88, bottom=0.1)
+    return fig
+
+
 def make_plots(results, args):
     """Save the technical detail plot (|t| per point/feature + T² per window)."""
     try:
@@ -456,6 +536,14 @@ def make_plots(results, args):
     plt.close(summary)
     print("Saved summary to {}".format(summary_out))
 
+    # Save the comparison table figure
+    if not args.no_table:
+        table_fig = _make_table_figure(results, args)
+        table_out = os.path.join(REPO_ROOT, "tvla_table.png")
+        table_fig.savefig(table_out, dpi=150)
+        plt.close(table_fig)
+        print("Saved table to {}".format(table_out))
+
 
 # --------------------------------------------------------------------------
 # Main
@@ -478,6 +566,8 @@ def parse_args():
                         help="save per-version t-stats / T^2 to tvla_stats.npz")
     parser.add_argument("--no-plots", action="store_true",
                         help="do not save tvla_results.png")
+    parser.add_argument("--no-table", action="store_true",
+                        help="do not save tvla_table.png")
     parser.add_argument("--order", type=int, choices=[1, 2], default=1,
                         help="TVLA order: 1=first-order (default), 2=second-order centered-product")
     parser.add_argument("--second-order-window-size", type=int, default=10,
