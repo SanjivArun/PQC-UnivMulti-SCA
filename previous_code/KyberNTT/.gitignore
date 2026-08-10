@@ -1,0 +1,7 @@
+*.elf
+*.list
+*.map
+*.d
+*.o
+!vector.o
+!elmoasmfunctions.o
