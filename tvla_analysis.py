@@ -582,6 +582,8 @@ def parse_args():
     parser.add_argument("--plot-trace", action="store_true",
                         help="plot Welch univariate TVLA traces: unmasked_trace.png (unmasked), "
                              "masked_trace.png (first-order masked), masked_second_order_trace.png (second-order masked)")
+    parser.add_argument("--plot-second-order-t2", action="store_true",
+                        help="plot Hotelling T² multivariate TVLA traces for second-order: unmasked_second_order_t2_trace.png, masked_second_order_t2_trace.png")
     return parser.parse_args()
 
 
@@ -733,6 +735,40 @@ def main():
                     y_label="Feature |t|",
                     show_raw_trace=False,
                     roi_length=15000)
+
+            # Plot Hotelling T² second-order multivariate TVLA trace
+            if args.plot_second_order_t2:
+                W = args.second_order_window_size
+                d = W * (W + 1) // 2
+                n0 = args.nb_fixed
+                n1 = args.nb_fixed
+                nu = n0 + n1 - d - 1
+                if nu > 0:
+                    scale = (n0 + n1 - 2) * d / nu
+                else:
+                    scale = 1.0
+                f_crit = tvla.f_critical(d, nu - d + 1 if nu - d + 1 > 0 else 1,
+                                         tvla.DEFAULT_ALPHA)
+                t2_threshold = f_crit * scale
+
+                t_stats_label = "Welch |t|"
+
+                if label == "unmasked":
+                    output_path = os.path.join(REPO_ROOT, "unmasked_second_order_t2_trace.png")
+                    t_label = "Hotelling T² Unmasked Second-Order TVLA"
+                else:  # masked
+                    output_path = os.path.join(REPO_ROOT, "masked_second_order_t2_trace.png")
+                    t_label = "Hotelling T² Masked Second-Order TVLA"
+
+                trace_plot.plot_hotelling_t2_trace(
+                    t2=t2,
+                    t2_threshold=t2_threshold,
+                    t2_label=t_label,
+                    t_stats=t_stats,
+                    t_stats_threshold=tvla.DEFAULT_TVLA_THRESHOLD,
+                    t_stats_label=t_stats_label,
+                    output_path=output_path,
+                    roi_length=5000)
 
     print_table(results, args)
 
