@@ -629,12 +629,13 @@ def main():
             print("  ground truth: {} | univariate: {} | multivariate: {}"
                   .format(ground_truth, univariate, multivariate))
 
-            # Plot Welch unmasked univariate TVLA trace
-            if args.plot_trace and label == "unmasked":
-                trace_plot.plot_unmasked_welch_trace(
+            # Plot Welch univariate TVLA trace
+            if args.plot_trace:
+                trace_plot.plot_welch_trace(
+                    label.capitalize(),
                     t_stats,
                     group0[0],
-                    os.path.join(REPO_ROOT, "unmasked_trace.png"))
+                    os.path.join(REPO_ROOT, "{}_trace.png".format(label)))
 
         else:
             # -------- SECOND-ORDER PIPELINE --------

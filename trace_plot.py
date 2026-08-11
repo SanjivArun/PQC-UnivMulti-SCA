@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
-"""trace_plot.py -- Plot Welch Unmasked Univariate TVLA trace data from ELMO.
+"""trace_plot.py -- Plot Welch Univariate TVLA trace data from ELMO.
 
-Called by tvla_analysis.py via:   trace_plot.plot_unmasked_welch_trace(...)
+Called by tvla_analysis.py via:   trace_plot.plot_welch_trace(...)
 
-Produces:  unmasked_trace.png (Welch t-stat line graph + sample power trace overlay)
+Produces:  unmasked_trace.png and/or masked_trace.png (Welch t-stat line graphs
+           with ±4.5 threshold markers + sample power trace overlay)
 """
 
 
-def plot_unmasked_welch_trace(t_stats, raw_trace, output_path, threshold=4.5):
-    """Save the Welch t-statistic as a line-graph PNG with a sample power trace overlay.
+def plot_welch_trace(label, t_stats, raw_trace, output_path=None, threshold=4.5):
+    """Save the Welch t-statistic as a line-graph PNG with a raw trace overlay.
 
     Parameters
     ----------
-    t_stats : np.ndarray          - per-point Welch t-statistic, shape (n_points,)
-    raw_trace : np.ndarray        - one raw power trace from the ELMO output, shape (n_points,)
-    output_path : str             - PNG output file path
-    threshold : float             - |t| threshold (default 4.5)
+    label : str          - e.g. ``"Unmasked"`` or ``"Masked"`` (used in title)
+    t_stats : np.ndarray - per-point Welch t-statistic, shape (n_points,)
+    raw_trace : np.ndarray - one raw power trace from the ELMO output, shape (n_points,)
+    output_path : str or None - PNG output. If None, defaults to ``{label.lower()}_trace.png``
+    threshold : float   - |t| threshold (default 4.5)
     """
     import numpy as np
 
@@ -27,6 +29,9 @@ def plot_unmasked_welch_trace(t_stats, raw_trace, output_path, threshold=4.5):
         print("matplotlib not available; skipping trace plot.")
         return
 
+    if output_path is None:
+        output_path = "{}_trace.png".format(label.lower())
+
     n_points = len(t_stats)
     positions = np.arange(n_points)
 
@@ -34,7 +39,7 @@ def plot_unmasked_welch_trace(t_stats, raw_trace, output_path, threshold=4.5):
         2, 1, figsize=(14, 5), sharex=True,
         gridspec_kw={"height_ratios": [3, 1]}
     )
-    fig.suptitle("Welch Unmasked Univariate TVLA", fontsize=13, fontweight="bold")
+    fig.suptitle("Welch {} Univariate TVLA".format(label), fontsize=13, fontweight="bold")
 
     # --- Panel A: Welch t-statistic line graph ---
     ax_t.plot(positions, t_stats, color="#1f77b4", lw=0.8, zorder=5, label="Welch t")
@@ -60,4 +65,4 @@ def plot_unmasked_welch_trace(t_stats, raw_trace, output_path, threshold=4.5):
     fig.tight_layout(rect=[0, 0.02, 1, 0.94])
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
-    print(f"Saved trace plot to {output_path}")
+    print("Saved trace plot to {}".format(output_path))
