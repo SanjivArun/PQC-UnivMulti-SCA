@@ -158,3 +158,133 @@ def plot_welch_trace(t_stats, raw_trace, output_path, threshold=4.5,
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved trace plot to {output_path}")
+
+
+def plot_hotelling_t2_trace(t2, t2_threshold, t2_label=None,
+                           t_stats=None, t_stats_threshold=4.5,
+                           t_stats_label=None,
+                           output_path="/tmp/hotelling_t2.png",
+                           roi_length=None):
+    """Save Hotelling T² multivariate TVLA trace data as a line-graph PNG.
+
+    Two-panel figure:
+      Panel A: T² per window with threshold line and green "safe" zone
+      Panel B: Welch |t| per-feature (second-order), if provided
+
+    Parameters
+    ----------
+    t2 : np.ndarray
+        Per-window T² values, shape (n_windows,).
+    t2_threshold : float
+        F critical value scaled to T² units (t2_threshold = f_crit * scale).
+        Windows above this line are above the detection threshold.
+    t2_label : str or None
+        Label for the T² panel y-axis (defaults to "T²").
+    t_stats : np.ndarray or None
+        Per-feature Welch absolute t-statistics, shape (n_features,).
+        If provided, Panel B shows |t| for comparison.
+    t_stats_threshold : float
+        |t| threshold, default 4.5.
+    t_stats_label : str or None
+        Label for the Welch |t| panel y-axis (defaults to "Welch |t|").
+    output_path : str
+        PNG output file path.
+    roi_length : int or None
+        Number of leading windows to display in Panel A. If *None*,
+        the full result is shown.
+    """
+    import numpy as np
+
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:
+        print("matplotlib not available; skipping trace plot.")
+        return
+
+    n_windows = len(t2)
+    pos = np.arange(n_windows)
+
+    # ROI slicing
+    end = min(n_windows, roi_length) if roi_length is not None else n_windows
+    pos_display = pos[:end]
+    t2_display = t2[:end]
+
+    # --- Panel A: T² line graph ---
+    fig, ax_t2 = plt.subplots(1, 1, figsize=(14, 3.5))
+    fig.suptitle("Hotelling T² Multivariate TVLA", fontsize=13, fontweight="bold")
+
+    ax_t2.plot(pos_display, t2_display, color="#1f77b4", lw=0.8, zorder=5, label="T²")
+
+    # Green zone below threshold
+    ax_t2.axhspan(0, t2_threshold, color="green", alpha=0.08, zorder=0)
+    # Red threshold line
+    ax_t2.axhline(t2_threshold, color="red", ls="--", lw=1.2,
+                  label="T² threshold = {:.1f}".format(t2_threshold), zorder=2)
+
+    # Mark leaking windows (above threshold)
+    leaking_mask = t2_display > t2_threshold
+    if leaking_mask.any():
+        ax_t2.scatter(pos_display[leaking_mask], t2_display[leaking_mask],
+                      color="red", s=8, zorder=10, label="Leaking windows",
+                      edgecolors="none")
+
+    ax_t2.set_ylabel(t2_label if t2_label else "T²")
+    ax_t2.set_xlabel("Window index")
+    ax_t2.legend(loc="upper right", fontsize=9)
+
+    max_t2 = max(float(t2_display.max()), t2_threshold) if t2_display.size > 0 else t2_threshold
+    ax_t2.set_ylim(0, max_t2 * 1.12)
+
+    # --- Panel B: Welch |t| if provided ---
+    if t_stats is not None:
+        ax_t2 = None
+
+    if t_stats is not None:
+        n_features = len(t_stats)
+        end_b = min(n_features, roi_length) if roi_length is not None else n_features
+        pos_display_b = np.arange(end_b)
+        t_stats_display = t_stats[:end_b]
+
+        fig, (ax_t2, ax_welch) = plt.subplots(
+            2, 1, figsize=(14, 6), sharex=True,
+            gridspec_kw={"height_ratios": [3, 1]}
+        )
+        fig.suptitle("Hotelling T² + Welch |t| Multivariate TVLA", fontsize=13, fontweight="bold")
+
+        # Panel A: T² line graph (same as above)
+        ax_t2.plot(pos_display, t2_display, color="#1f77b4", lw=0.8, zorder=5, label="T²")
+        ax_t2.axhspan(0, t2_threshold, color="green", alpha=0.08, zorder=0)
+        ax_t2.axhline(t2_threshold, color="red", ls="--", lw=1.2,
+                      label="T² threshold = {:.1f}".format(t2_threshold), zorder=2)
+        if leaking_mask.any():
+            ax_t2.scatter(pos_display[leaking_mask], t2_display[leaking_mask],
+                          color="red", s=8, zorder=10, label="Leaking windows",
+                          edgecolors="none")
+        ax_t2.set_ylabel(t2_label if t2_label else "T²")
+        ax_t2.set_xlabel("Window index")
+        ax_t2.legend(loc="upper right", fontsize=9)
+        ax_t2.set_ylim(0, max_t2 * 1.12)
+
+        # Panel B: Welch |t| per feature
+        ax_welch.plot(pos_display_b, t_stats_display, color="#1f77b4", lw=0.8,
+                      zorder=5, label="Welch |t|", alpha=0.9)
+        ax_welch.axhline(t_stats_threshold, color="red", ls="--", lw=1.2,
+                        label="|t| > {:.1f}".format(t_stats_threshold), zorder=2)
+        ax_welch.axhline(-t_stats_threshold, color="red", ls="--", lw=1.2, zorder=2)
+        ax_welch.axhspan(-t_stats_threshold, t_stats_threshold,
+                        color="green", alpha=0.06, zorder=0)
+        max_welch = float(np.nanmax(np.abs(t_stats_display)))
+        if np.isinf(max_welch) or np.isnan(max_welch):
+            max_welch = t_stats_threshold
+        y_max_welch = max(t_stats_threshold, max_welch)
+        ax_welch.set_ylim(-y_max_welch * 1.12, y_max_welch * 1.12)
+        ax_welch.set_ylabel(t_stats_label if t_stats_label else "Welch |t|")
+        ax_welch.set_xlabel("Feature index")
+        ax_welch.legend(loc="upper right", fontsize=9)
+
+    fig.tight_layout(rect=[0, 0.02, 1, 0.94])
+    fig.savefig(output_path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved T² trace plot to {output_path}")
