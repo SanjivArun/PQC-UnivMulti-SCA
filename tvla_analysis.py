@@ -43,6 +43,7 @@ import numpy as np
 from elmo import get_simulation
 
 import tvla
+import trace_plot
 
 # --------------------------------------------------------------------------
 # Paths / constants
@@ -578,6 +579,8 @@ def parse_args():
                              "with per_feature_sigma=SIGMA; 0.0 = disabled (for debugging/verifying multivariate)")
     parser.add_argument("--joint-leak-fraction", type=float, default=0.1,
                         help="fraction of windows to inject when --inject-masked-joint-leak is set (default 0.1)")
+    parser.add_argument("--plot-trace", action="store_true",
+                        help="plot Welch unmasked univariate TVLA trace to unmasked_trace.png")
     return parser.parse_args()
 
 
@@ -625,6 +628,13 @@ def main():
             }
             print("  ground truth: {} | univariate: {} | multivariate: {}"
                   .format(ground_truth, univariate, multivariate))
+
+            # Plot Welch unmasked univariate TVLA trace
+            if args.plot_trace and label == "unmasked":
+                trace_plot.plot_unmasked_welch_trace(
+                    t_stats,
+                    group0[0],
+                    os.path.join(REPO_ROOT, "unmasked_trace.png"))
 
         else:
             # -------- SECOND-ORDER PIPELINE --------
