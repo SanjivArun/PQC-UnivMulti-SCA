@@ -580,7 +580,8 @@ def parse_args():
     parser.add_argument("--joint-leak-fraction", type=float, default=0.1,
                         help="fraction of windows to inject when --inject-masked-joint-leak is set (default 0.1)")
     parser.add_argument("--plot-trace", action="store_true",
-                        help="plot Welch unmasked univariate TVLA trace to unmasked_trace.png")
+                        help="plot Welch univariate TVLA traces: unmasked_trace.png (unmasked), "
+                             "masked_trace.png (first-order masked), masked_second_order_trace.png (second-order masked)")
     return parser.parse_args()
 
 
@@ -629,13 +630,27 @@ def main():
             print("  ground truth: {} | univariate: {} | multivariate: {}"
                   .format(ground_truth, univariate, multivariate))
 
-            # Plot Welch univariate TVLA trace
-            if args.plot_trace:
+            # Plot Welch unmasked univariate TVLA trace
+            if args.plot_trace and label == "unmasked":
                 trace_plot.plot_welch_trace(
-                    label.capitalize(),
                     t_stats,
                     group0[0],
-                    os.path.join(REPO_ROOT, "{}_trace.png".format(label)))
+                    os.path.join(REPO_ROOT, "unmasked_trace.png"),
+                    title_prefix="Welch Unmasked Univariate TVLA",
+                    y_label="Welch t-statistic",
+                    show_raw_trace=True,
+                    roi_length=3000)
+
+            # Plot Welch masked univariate TVLA trace (first-order)
+            if args.plot_trace and label == "masked":
+                trace_plot.plot_welch_trace(
+                    t_stats,
+                    group0[0],
+                    os.path.join(REPO_ROOT, "masked_trace.png"),
+                    title_prefix="Welch Masked Univariate TVLA (First-Order)",
+                    y_label="Welch t-statistic",
+                    show_raw_trace=True,
+                    roi_length=3000)
 
         else:
             # -------- SECOND-ORDER PIPELINE --------
@@ -696,6 +711,28 @@ def main():
                 "f_crit": f_crit_val,
                 "order": 2,
             }
+
+            # Plot Welch unmasked second-order univariate TVLA trace
+            if args.plot_trace and label == "unmasked":
+                trace_plot.plot_welch_trace(
+                    t_stats,
+                    raw_trace=None,
+                    output_path=os.path.join(REPO_ROOT, "unmasked_second_order_trace.png"),
+                    title_prefix="Welch Unmasked Second-Order Univariate TVLA",
+                    y_label="Feature |t|",
+                    show_raw_trace=False,
+                    roi_length=15000)
+
+            # Plot Welch masked second-order univariate TVLA trace
+            if args.plot_trace and label == "masked":
+                trace_plot.plot_welch_trace(
+                    t_stats,
+                    raw_trace=None,
+                    output_path=os.path.join(REPO_ROOT, "masked_second_order_trace.png"),
+                    title_prefix="Welch Masked Second-Order Univariate TVLA",
+                    y_label="Feature |t|",
+                    show_raw_trace=False,
+                    roi_length=15000)
 
     print_table(results, args)
 
