@@ -198,7 +198,7 @@ def execute_simulation(project):
     if not os.path.isabs(leaking_binary_path):
         leaking_binary_path = pjoin(project.get_project_directory(), project.get_binary_path())
     if not os.path.isfile(leaking_binary_path):
-        raise BinaryNotFoundError('Binary not found. Did you compile your project?')
+        raise DontFindBinaryError('Binary not found. Did you compile your project?')
     
     if not os.path.isfile(pjoin(elmo_path, ELMO_EXECUTABLE_NAME)):
         raise Exception('Installation Error: the executable of the ELMO tool is not found.')

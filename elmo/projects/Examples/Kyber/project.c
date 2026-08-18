@@ -3,6 +3,7 @@
 
 #include "elmoasmfunctionsdef-extension.h"
 #include "kem.h"
+#include "indcpa.h"
 #include "symmetric.h"
 
 int main(void) {
@@ -38,31 +39,31 @@ int main(void) {
     // ============================================================
 
     // hash_g(kgbuf, kgbuf, 2 * KYBER_SYMBYTES)
-    starttrigger();
+    // starttrigger();
     hash_g(kgbuf, kgbuf, 2 * KYBER_SYMBYTES);
-    endtrigger();
+    // endtrigger();
 
     // indcpa_keypair_derand(pk, sk, kgbuf)
-    starttrigger();
+    // starttrigger();
     indcpa_keypair_derand(pk, sk, kgbuf);
-    endtrigger();
+    // endtrigger();
 
     // memcpy(sk+KYBER_INDCPA_SECRETKEYBYTES, pk, KYBER_PUBLICKEYBYTES)
-    starttrigger();
+    // starttrigger();
     for(i = 0; i < KYBER_PUBLICKEYBYTES; i++)
       sk[KYBER_INDCPA_SECRETKEYBYTES + i] = pk[i];
-    endtrigger();
+    // endtrigger();
 
     // hash_h(sk+KYBER_SECRETKEYBYTES-2*KYBER_SYMBYTES, pk, KYBER_PUBLICKEYBYTES)
-    starttrigger();
+    // starttrigger();
     hash_h(sk+KYBER_SECRETKEYBYTES-2*KYBER_SYMBYTES, pk, KYBER_PUBLICKEYBYTES);
-    endtrigger();
+    // endtrigger();
 
     // memcpy(sk+KYBER_SECRETKEYBYTES-KYBER_SYMBYTES, coins+KYBER_SYMBYTES, KYBER_SYMBYTES)
-    starttrigger();
+    // starttrigger();
     for(i = 0; i < KYBER_SYMBYTES; i++)
       sk[KYBER_SECRETKEYBYTES-KYBER_SYMBYTES + i] = kgbuf[KYBER_SYMBYTES + i];
-    endtrigger();
+    // endtrigger();
 
     // Print public key and secret key
     for(i = 0; i < KYBER_PUBLICKEYBYTES; i++) {
@@ -83,9 +84,9 @@ int main(void) {
     // hash_g(kr, buf, 2*KYBER_SYMBYTES)
     // indcpa_enc(ct, buf, pk, kr+KYBER_SYMBYTES)
     // memcpy(ss,kr,KYBER_SYMBYTES)
-    starttrigger();
+    // starttrigger();
     crypto_kem_enc_derand(ct, enc_kr, pk, enc_coins);
-    endtrigger();
+    // endtrigger();
 
     // Print shared secret and ciphertext
     for(i = 0; i < KYBER_SSBYTES; i++) {
