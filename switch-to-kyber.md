@@ -1,29 +1,33 @@
 # Plan: Switch tvla_analysis.py from KyberNTT to Kyber
 
 ## Current state
-- **Commit:** `bb1ad7b` - "docs: add BDV21 A2B wiring plan"
+- **Commit:** `06cfb2a` - "Restructure project.c with 3 trigger blocks (KeyGen/Encap/Decap) for Kyber and KyberMasked"
 - **Branch:** `master` — pushed to `origin/master`
-- **Untracked:** `elmo/projects/Examples/KyberMasked/test_masking` only
+- **Untracked:** `elmo/projects/Examples/KyberMasked/test_masking`
 
 ## Goal
 Change `tvla_analysis.py` to use `elmo/projects/Examples/Kyber/` and `elmo/projects/Examples/KyberMasked/` instead of `elmo/projects/Examples/KyberNTT/` and `elmo/projects/Examples/KyberNTTMasked/`.
 
 ## Class name conflict
-Both Kyber and KyberMasked define `KyberKEMSimulation`. Need to rename the masked one to `KyberKEMMaskedSimulation`.
+Both Kyber and KyberMasked define `KyberKEMSimulation`. Renamed the masked one to `KyberKEMMaskedSimulation`.
 
-## Changes
+## Completed: Steps 1–4 — Switch tvla_analysis.py from KyberNTT to Kyber
+All 4 original steps are complete in **`55251e6`**:
+- Step 1 — Renamed `KyberKEMSimulation` → `KyberKEMMaskedSimulation` in `KyberMasked/projectclass.py`
+- Step 2 — Updated `tvla_analysis.py` paths and VERSIONS list from KyberNTT to Kyber/KyberMasked
+- Step 3 — Updated docstring/header references
+- Step 4 — Updated argparse description and plot titles
 
-### Step 1 — Rename class in `KyberMasked/projectclass.py`
-- Rename `KyberKEMSimulation` → `KyberKEMMaskedSimulation`
+## Completed: Steps 5–6 — Fix ELMO compatibility for full Kyber
+- Step 5 (`ebc6ef0`) — Increased linker script RAM from 8K → 64K (ROM 64K → 256K) in both `Kyber/project.ld` and `KyberMasked/project.ld` to accommodate full Kyber memory needs
+- Step 6 (`06cfb2a`) — Restructured `project.c` in `Kyber/` and `KyberMasked/`:
+  - Added `memcpy.c` (minimal implementation with ELMO attributes) to `Kyber/Makefile`
+  - Added local buffers (`kgbuf`, `enc_coins`, `enc_kr`) instead of relying on function-scoped vars after loop
+  - Split single trigger region into 3 separate trigger blocks: **KeyGen**, **Encap**, **Decap** with matching `endtrigger`
+  - Added output printing for public key, secret key, shared secret, and ciphertext
+  - Restructured `KyberMasked/project.c` identically (without memcpy.c since it uses different code path)
 
-### Step 2 — Update `tvla_analysis.py` paths (lines 55-63)
-- `UNMASKED_BIN`: `KyberNTT` → `Kyber`
-- `MASKED_BIN`: `KyberNTTMasked` → `KyberMasked`
-- VERSIONS list: `KyberNTTSimulation` → `KyberKEMSimulation`, `KyberNTTMaskedSimulation` → `KyberKEMMaskedSimulation`
-
-### Step 3 — Update docstring/header (lines 1-34)
-- `KyberNTT` → `Kyber` (and `KyberNTTMasked` → `KyberKEMMasked` where appropriate)
-
-### Step 4 — Update argparse description, plot titles and remaining KyberNTT references
-- Line 554: argparse description `"KyberNTT"` → something generic
-- Lines 378-385: `fig.suptitle` references to `"KyberNTT"` → `"Kyber"`
+## Remaining
+- Verify TVLA runs end-to-end with the new project structure
+- Any further ELMO compatibility issues specific to ELMO framework
+- Any masking correctness validation for the new trigger structure
