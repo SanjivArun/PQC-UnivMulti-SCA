@@ -86,9 +86,9 @@ LDSCRIPT	= $(BINARY).ld
 ELMOASMFUNCTIONS = elmoasmfunctions.o
 
 #!!! PLEASE ADD YOUR SOURCES, HEADERS AND OBJECTS HERE !!!
-SOURCES = ntt.c poly.c polyvec.c reduce cbd.c verify.c fips202.c symmetric-shake.c indcpa.c randombytes.c kem.c project.c
+SOURCES = ntt.c poly.c polyvec.c reduce cbd.c verify.c fips202.c symmetric-shake.c indcpa.c randombytes.c kem.c project.c memcpy.c
 HEADERS = ntt.h poly.h polyvec.h reduce.h params.h
-OBJECTS = ntt.o poly.o polyvec.o reduce.o cbd.o verify.o fips202.o symmetric-shake.o indcpa.o randombytes.o kem.o project.o
+OBJECTS = ntt.o poly.o polyvec.o reduce.o cbd.o verify.o fips202.o symmetric-shake.o indcpa.o randombytes.o kem.o project.o memcpy.o
 
 ###############################################################################
 # C flags
