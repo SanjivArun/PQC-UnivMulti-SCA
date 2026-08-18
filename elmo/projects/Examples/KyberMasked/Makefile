@@ -140,7 +140,7 @@ $(BINARY).list: $(BINARY).elf
 $(BINARY).elf $(BINARY).map: $(OBJECTS) $(LDSCRIPT)
 	$(Q)$(LD) $(LDFLAGS) vector.o $(ARCH_FLAGS) $(OBJECTS) $(ELMOASMFUNCTIONS) $(LDLIBS) -o $(BINARY).elf
 
-%.o: %.c $(HEADER)
+%.o: %.c $(HEADERS)
 		$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) $(ARCH_FLAGS) -c -o $@ $<
 
 clean:

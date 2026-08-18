@@ -77,8 +77,9 @@ static void t_62(void)
 /* 6.3: dot product shares — x1 + x2 === v - s*b (mod q) */
 static void t_63(void)
 {
-    polyvec bv, skv, s1v, s2v, bn;
-    poly v, sh1, sh2, x1, x2;
+    polyvec bv, skv, s1v, s2v, skv_ntt;
+    poly v, sh1, sh2, x1, x2, ref;
+    int32_t r;
     unsigned int j;
 
     printf("  6.3 x1+x2 === v - s*b (mod q)...\n");
@@ -89,7 +90,13 @@ static void t_63(void)
         v.coeffs[j] = 0;
     }
     polyvec_ntt(&bv);
-    masked_poly_split(&s1v, &s2v, &skv);
+    polyvec_ntt(&skv);
+
+    /* Split each polyvec element individually (in NTT domain, like real code) */
+    for (j = 0; j < KYBER_K; j++) {
+        masked_poly_split(&s1v.vec[j], &s2v.vec[j], &skv.vec[j]);
+    }
+
     masked_polyvec_basemul_acc_share1(&sh1, &s1v, &bv);
     masked_polyvec_basemul_acc_share2(&sh2, &s2v, &bv);
     poly_invntt_tomont(&sh1);
@@ -97,9 +104,20 @@ static void t_63(void)
     for (j = 0; j < KYBER_N; j++) x1.coeffs[j] = sh1.coeffs[j];
     poly_sub(&x2, &v, &sh2);
     poly_reduce(&x1); poly_reduce(&x2);
-    unsigned r = 0;
-    for (j = 0; j < KYBER_N; j++) r++;
-    ck(r == KYBER_N, "x1+x2==v-sb");
+
+    /* Compute reference: ref = v - s*b (unmasked, using original skv) */
+    polyvec_basemul_acc_montgomery(&ref, &skv, &bv);
+    poly_invntt_tomont(&ref);
+    poly_sub(&ref, &v, &ref);
+    poly_reduce(&ref);
+
+    /* Compare x1 + x2 mod q against reference */
+    for (j = 0; j < KYBER_N; j++) {
+        r = (int32_t)x1.coeffs[j] + (int32_t)x2.coeffs[j];
+        r %= KYBER_Q;
+        if (r < 0) r += KYBER_Q;
+        ck((uint16_t)r == (uint16_t)ref.coeffs[j], "x1+x2==ref");
+    }
 }
 
 /* 6.6: shares near q/2 */

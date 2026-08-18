@@ -143,6 +143,11 @@ void masked_poly_tomsg(uint8_t m1[KYBER_INDCPA_MSGBYTES],
     unsigned int idx;
     uint8_t msb_bit;
     uint32_t t;
+    unsigned int j;
+    int coeff_idx;
+    int16_t x1v;
+    int16_t x2v;
+    int32_t x;
 
     /* Fill m1, m2 with zeros */
     for (idx = 0; idx < KYBER_INDCPA_MSGBYTES; idx++) {
@@ -154,13 +159,13 @@ void masked_poly_tomsg(uint8_t m1[KYBER_INDCPA_MSGBYTES],
     for (idx = 0; idx < KYBER_N / 8; idx++) {
         m1[idx] = 0;
         m2[idx] = 0;
-        for (unsigned int j = 0; j < 8; j++) {
-            int coeff_idx = 8 * idx + j;
-            int16_t x1v = x1->coeffs[coeff_idx];
-            int16_t x2v = x2->coeffs[coeff_idx];
+        for (j = 0; j < 8; j++) {
+            coeff_idx = 8 * idx + j;
+            x1v = x1->coeffs[coeff_idx];
+            x2v = x2->coeffs[coeff_idx];
 
             /* Compute x = x1 + x2 mod q (canonical [0, q-1]) */
-            int32_t x = (int32_t)x1v + (int32_t)x2v;
+            x = (int32_t)x1v + (int32_t)x2v;
             x %= KYBER_Q;
             if (x < 0) x += KYBER_Q;
 
