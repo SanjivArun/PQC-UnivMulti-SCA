@@ -7,7 +7,7 @@
 ###  - get_simulation(repository, classname=None)
 ###  - get_simulation_via_classname(classname)
 
-class KyberKEMSimulation(SimulationProject):
+class KyberKEMMaskedSimulation(SimulationProject):
     KYBER_K = 2 #k=2 for Kyber512
     KYBER_N = 256 #n=256 for Kyber512
     

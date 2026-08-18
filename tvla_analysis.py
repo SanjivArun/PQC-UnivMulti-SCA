@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-tvla_analysis.py -- TVLA (Test Vector Leakage Assessment) study of the KyberNTT
+tvla_analysis.py -- TVLA (Test Vector Leakage Assessment) study of the Kyber
 masked vs unmasked ELMO simulations, in the "fixed vs random" design.
 
-For each version of Kyber (unmasked ``KyberNTTSimulation`` and masked
-``KyberNTTMaskedSimulation``) this script:
+For each version of Kyber (unmasked ``KyberKEMSimulation`` and masked
+``KyberKEMMaskedSimulation``) this script:
 
 1. Runs the simulation with ``--nb-fixed`` traces built from a *constant*
    (fixed) secret followed by ``--nb-random`` traces built from *random*
@@ -53,14 +53,14 @@ REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
 ELMO_TOOL_DIR = os.path.join(REPO_ROOT, "elmo", "elmo-tool")
 
 UNMASKED_BIN = os.path.abspath(
-    os.path.join(REPO_ROOT, "elmo", "projects", "Examples", "KyberNTT", "project.bin"))
+    os.path.join(REPO_ROOT, "elmo", "projects", "Examples", "Kyber", "project.bin"))
 MASKED_BIN = os.path.abspath(
-    os.path.join(REPO_ROOT, "elmo", "projects", "Examples", "KyberNTTMasked", "project.bin"))
+    os.path.join(REPO_ROOT, "elmo", "projects", "Examples", "KyberMasked", "project.bin"))
 
 #: Per-version definition: (label, simulation class name, binary path).
 VERSIONS = [
-    ("unmasked", "KyberNTTSimulation", UNMASKED_BIN),
-    ("masked", "KyberNTTMaskedSimulation", MASKED_BIN),
+    ("unmasked", "KyberKEMSimulation", UNMASKED_BIN),
+    ("masked", "KyberKEMMaskedSimulation", MASKED_BIN),
 ]
 
 
@@ -375,12 +375,12 @@ def _make_summary_figure(results, args):
 
     if args.order == 2:
         fig.suptitle(
-            "KyberNTT -- Summary for the Common Layman\n"
+            "Kyber -- Summary for the Common Layman\n"
             "Can the masked version protect your secrets from second-order side-channel attacks?",
             fontsize=11, fontweight="bold", y=0.96)
     else:
         fig.suptitle(
-            "KyberNTT -- Summary for the Common Layman\n"
+            "Kyber -- Summary for the Common Layman\n"
             "Can the masked version protect your secrets from side-channel attacks?",
             fontsize=11, fontweight="bold", y=0.96)
 
@@ -552,7 +552,7 @@ def make_plots(results, args):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Fixed-vs-random TVLA leakage study of masked vs unmasked KyberNTT.")
+        description="Fixed-vs-random TVLA leakage study of masked vs unmasked Kyber.")
     parser.add_argument("--nb-fixed", type=int, default=256,
                         help="number of traces with the fixed (constant) secret (default 256)")
     parser.add_argument("--nb-random", type=int, default=256,
