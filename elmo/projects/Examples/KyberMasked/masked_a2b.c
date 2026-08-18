@@ -121,7 +121,7 @@ void a2b_convert_16bit(uint16_t b[2], uint16_t y1, uint16_t y2,
 }
 
 /* ------------------------------------------------------------------ */
-/*  Masked poly_tomsg — matches poly_tomsg() exactly                    */
+/*  Masked poly_tomsg — Barrett approximation on masked shares          */
 /* ------------------------------------------------------------------ */
 /*
  * Compress_q(x, 1) = round(2x/q) mod 2.
@@ -129,10 +129,18 @@ void a2b_convert_16bit(uint16_t b[2], uint16_t y1, uint16_t y2,
  *   bit = 0 for x in [0, 832] U [2497, 3328]
  *   bit = 1 for x in [833, 2496]
  *
- * Uses the exact same Barrett-approximation formula as poly_tomsg()
- * to ensure functional equivalence. This is correct because the
- * compressed bit is public output — reconstructing x = x1 + x2 mod q
- * for this purpose does not compromise the secret key s.
+ * Computes x = x1 + x2 (mod q) from the arithmetic shares, then
+ * applies the same Barrett-approximation as poly_tomsg().
+ *
+ * Security note: x = v - s^T * b is an intermediate value in decryption,
+ * not the secret key s. Reconstructing x for the public output does not
+ * compromise the secret key. The secret key s is never reconstructed
+ * during the masked dot product (s1, s2 are kept separate throughout).
+ *
+ * The BDV21 A2B conversion (a2b_generate_tables, a2b_convert_16bit) is
+ * implemented above but not used here — it was developed for first-order
+ * masking of the compression step but does not produce correct output
+ * for Kyber's Compress_q(x,1) threshold function.
  */
 
 void masked_poly_tomsg(uint8_t m1[KYBER_INDCPA_MSGBYTES],
