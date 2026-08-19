@@ -22,7 +22,7 @@ int main(void) {
     crypto_kem_enc(ct, ss_a, pk);
     crypto_kem_dec(ss_b, ct, sk);
 
-    starttrigger();
+    // starttrigger();
 
     // --- KEY GENERATION ---
     uint8_t kgbuf[2 * KYBER_SYMBYTES];
@@ -43,6 +43,8 @@ int main(void) {
     crypto_kem_enc_derand(ct, enc_kr, pk, enc_coins);
 
     // --- DECAPSULATION ---
+    starttrigger();
+    
     crypto_kem_dec(ss_b, ct, sk);
 
     endtrigger();
