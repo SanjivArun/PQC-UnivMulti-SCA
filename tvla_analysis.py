@@ -111,8 +111,16 @@ def run_simulation(classname, challenges, verbose=False):
     simulation = Simulation()
     simulation.set_challenges(challenges)
     res = simulation.run()
-    if res.get("error"):
-        raise RuntimeError("ELMO run failed ({}): {}".format(classname, res["error"]))
+    err = res.get("error") or ""
+    # ELMO emits benign ARM-emu stack diagnostics ("push {lr} ... popped 0x")
+    # on stderr; they don't stop trace generation, so ignore unless traces
+    # failed to be produced.
+    real_err = "\n".join(
+        line for line in err.splitlines() if "push {lr}" not in line
+    ).strip()
+    if real_err or not res.get("nb_traces"):
+        raise RuntimeError("ELMO run failed ({}): {}".format(
+            classname, err or "(no traces produced)"))
     if verbose:
         print("  ran {}: {} traces x {} instructions".format(
             classname, res["nb_traces"], res["nb_instructions"]))
