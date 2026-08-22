@@ -93,7 +93,7 @@ OBJECTS = ntt.o poly.o polyvec.o reduce.o cbd.o verify.o fips202.o symmetric-sha
 ###############################################################################
 # C flags
 
-CFLAGS += -Os -g
+CFLAGS += -O2 -g
 CFLAGS += -Wextra -Wshadow -Wimplicit-function-declaration
 CFLAGS += -Wredundant-decls -Wmissing-prototypes -Wstrict-prototypes
 CFLAGS += -fno-common -ffunction-sections -fdata-sections
@@ -110,7 +110,6 @@ CPPFLAGS	+= -Wall -Wundef
 LDFLAGS		+= --static -nostartfiles
 LDFLAGS		+= -T$(LDSCRIPT)
 LDFLAGS		+= -Wl,-Map=$(*).map
-LDFLAGS		+= -Wl,--gc-sections
 
 
 ###############################################################################
@@ -139,6 +138,9 @@ $(BINARY).list: $(BINARY).elf
 
 $(BINARY).elf $(BINARY).map: $(OBJECTS) $(LDSCRIPT)
 	$(Q)$(LD) $(LDFLAGS) vector.o $(ARCH_FLAGS) $(OBJECTS) $(ELMOASMFUNCTIONS) $(LDLIBS) -o $(BINARY).elf
+
+project.o: project.c $(HEADERS)
+		$(Q)$(CC) -O0 -g -fno-inline $(CPPFLAGS) $(ARCH_FLAGS) -c -o $@ $<
 
 %.o: %.c $(HEADER)
 		$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) $(ARCH_FLAGS) -c -o $@ $<
