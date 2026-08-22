@@ -93,7 +93,7 @@ OBJECTS = ntt.o poly.o polyvec.o reduce.o cbd.o verify.o fips202.o symmetric-sha
 ###############################################################################
 # C flags
 
-CFLAGS += -Os -g
+CFLAGS += -O2 -g
 CFLAGS += -Wextra -Wshadow -Wimplicit-function-declaration
 CFLAGS += -Wredundant-decls -Wmissing-prototypes -Wstrict-prototypes
 CFLAGS += -fno-common -ffunction-sections -fdata-sections
