@@ -1,192 +1,235 @@
 /*
- * Kyber Masked Decryption - Phase 4: Masked Compression (BDV21 A2B)
+ * Kyber Masked Decryption - Phase 4: Masked Compression (A2B)
  *
- * Implements masked_poly_tomsg() — computes Compress_q(x, 1) from
- * two arithmetic shares x1, x2 without reconstructing x = x1 + x2 (mod q).
+ * masked_poly_tomsg() computes Compress_q(x, 1) from two ARITHMETIC shares
+ * x1, x2 (x1 + x2 = x mod q) WITHOUT ever reconstructing x = x1 + x2.
  *
- * 4-step pipeline per coefficient (x1[j] + x2[j] ≡ x[j] mod 3329):
- *   1. y1 = x1 - 832  (subtract round(q/4))
- *   2. Modulus switch: reinterpret both shares mod-2^16
- *   3. y1 = y1 - 1665 (subtract round(q/2))
- *   4. BDV21 A2B conversion, MSB of B XOR r = Compress_q(x,1)
+ * Reference: the masked compaction from "First-Order Masked Kyber on ARM
+ * Cortex-M4" (HKK22, ePrint 2022/058), which is the mkm4 implementation.
+ * It uses:
+ *   - the OSFP18 mod-q -> mod-2^16 transform (no rejection sampling), and
+ *   - the BDV21 "Debrāize (fixed)" single-lookup table-based
+ *     arithmetic-to-Boolean conversion (ePrint 2021/067, Algorithm 8),
+ *   which is the secure variant (independent per-iteration mask r_i).
  *
- * Configuration: k=8, n=2 (two 8-bit iterations for 16-bit).
- * Memory: 2 × 2 × 256 × 16 bits = 2 KiB for table storage.
- * Randomness per coeff: n × (k+1) = 18 bits.
- *
- * BDV21 A2B from "Analysis and Comparison of Table-based Arithmetic
- * to Boolean Masking" (Van Beirendonck, D'Anvers, Verbauwhede,
- * TCHES 2021/067).
+ * Configuration (mkm4): k = 8, a2bn = 2 (two 8-bit iterations, 16-bit
+ * value), mod2k = 0xff, mod2nk = 0xffff. The table has a2bn * 2^(k+1)
+ * = 1024 16-bit entries.
  */
 
 #include <stdint.h>
-#include <stdio.h>
 #include "params.h"
 #include "poly.h"
 #include "masked_a2b.h"
 #include "randombytes.h"
 
-#define A2B_K      8   /* bits per chunk */
-#define A2B_N      2   /* number of chunks (16 / k) */
+#define A2B_K       8        /* bits per chunk          */
+#define A2B_N       2        /* number of chunks        */
+#define A2B_MOD2K   0xffu    /* mask for one k-bit chunk */
+#define A2B_MOD2NK  0xffffu  /* mask for the full value  */
 
-#define A2B_MASK_RNDQ  832   /* round(q / 4) = round(3329 / 4) */
-#define A2B_SHIFT_Q2   1665  /* round(q / 2) = round(3329 / 2) */
-
-#define A2B_TABLE_ENTRIES  (1 << A2B_K)  /* 256 */
+/* Flat index into the precomputed table (mkm4 def.h index()). */
+#define A2B_INDEX(i, beta, A) \
+    (((uint16_t)(i) << 9) | ((uint16_t)(beta) << A2B_K) | (uint16_t)(A))
 
 /* ------------------------------------------------------------------ */
-/*  Table generation  (BDV21 Algorithm 7 — Fixed Single-Lookup)        */
+/*  Fresh 32-bit random (advances the deterministic PRNG, constant
+ *  cycle count, no rejection sampling -> constant ELMO trace length). */
 /* ------------------------------------------------------------------ */
-
-void a2b_generate_tables(a2b_state *state)
+static uint32_t randomint(void)
 {
-    uint8_t raw[64];
-    int i, beta, a;
+    uint8_t b[4];
+    uint32_t v;
 
-    randombytes(raw, sizeof(raw));
+    randombytes(b, 4);
+    v = ((uint32_t)b[0] << 24)
+      | ((uint32_t)b[1] << 16)
+      | ((uint16_t)b[2] << 8)
+      | (uint32_t)b[3];
+    return v;
+}
+
+/* ------------------------------------------------------------------ */
+/*  BDV21 single-lookup A2B context (mkm4 a2b_singlelookup.c)          */
+/* ------------------------------------------------------------------ */
+static uint16_t A2B_T[A2B_N * 512];          /* 1024 entries = 2 KiB   */
+
+typedef struct {
+    uint16_t *T;
+    uint8_t  rho;
+    uint16_t rrr;
+} a2b_ctx_t;
+
+static a2b_ctx_t A2B_ctx;
+
+static void A2B_init(void);
+static uint32_t A2B_convert_sw(uint32_t A, uint32_t R);
+
+/* Table generation (BDV21 Algorithm 7 — "Debrāize (fixed)").
+ * Independent per-iteration mask r_i; single shared carry mask rho. */
+static void A2B_init(void)
+{
+    uint8_t r[A2B_N];
+    uint32_t buff;
+    uint32_t rrr = 0;
+    size_t i;
+    size_t A;
+
+    A2B_ctx.rho = (uint8_t)(randomint() & 1u);
+    buff = randomint() & 0xFFFFu;
 
     for (i = 0; i < A2B_N; i++) {
-        uint16_t rho   = (raw[2*i + 0] & 1);
-        uint16_t r_i   = raw[2*i + 1];
+        r[i] = (uint8_t)((buff >> (i * A2B_K)) & A2B_MOD2K);
+        rrr |= ((uint16_t)r[i] << (i * A2B_K));
+    }
+    A2B_ctx.rrr = (uint16_t)rrr;
 
-        state->r[i] = (uint8_t)r_i;
-
-        for (beta = 0; beta < 2; beta++) {
-            for (a = 0; a < (1 << A2B_K); a++) {
-                uint16_t A_plus;
-
-                if (beta == 1) {
-                    A_plus = (uint16_t)a + r_i + 1;
-                } else {
-                    A_plus = (uint16_t)a + r_i;
-                }
-
-                state->tables[i][beta][a] =
-                    A_plus ^ ((rho << A2B_K) | r_i);
-            }
+    for (i = 0; i < A2B_N; i++) {
+        for (A = 0; A < 256; A++) {
+            A2B_T[A2B_INDEX(i, A2B_ctx.rho, A)] =
+                (uint16_t)(A + r[i]) ^ (uint16_t)((A2B_ctx.rho << A2B_K) | r[i]);
+            A2B_T[A2B_INDEX(i, (uint8_t)(A2B_ctx.rho ^ 1), A)] =
+                (uint16_t)(A + r[i] + 1) ^ (uint16_t)((A2B_ctx.rho << A2B_K) | r[i]);
         }
     }
 }
 
-/* ------------------------------------------------------------------ */
-/*  BDV21 A2B conversion  (Algorithm 8 — Fixed Single-Lookup)          */
-/* ------------------------------------------------------------------ */
-/*
- * BDV21 converts arithmetic shares (y1, y2) where y1 + y2 = x mod 2^16
- * to Boolean shares B1, B2 where B1 XOR B2 = x mod 2^16.
- *
- * Processes from MSB to LSB (i = n-1 down to 0).
- * A = x - R mod 2^16, where R = r_0 | (r_1 << 8).
- * At iteration i, extract the i-th k-bit chunk of A, look up table,
- * produce B_i and carry beta.
- *
- * Invariant: (B_{n-1} || ... || B_0) XOR (r_{n-1} || ... || r_0) = x
- */
-void a2b_convert_16bit(uint16_t b[2], uint16_t y1, uint16_t y2,
-                       const a2b_state *state)
+/* Convert arithmetic (A, R) with A + R = x mod 2^16 into a Boolean
+ * mask B with B XOR rrr = x. Never sums A and R (Algorithm 8). */
+static uint32_t A2B_convert_sw(uint32_t A, uint32_t R)
 {
-    uint16_t A, R_l, result, Bi;
-    uint8_t beta;
-    uint8_t i;
+    size_t i;
+    uint32_t A_l;
+    uint32_t R_l;
+    uint32_t betaBi;
+    uint32_t beta = A2B_ctx.rho;
+    uint32_t Bi;
+    uint32_t B = 0;
 
-    /* x = y1 + y2 mod 2^16 */
-    uint16_t x = y1 + y2;
+    A = (A - A2B_ctx.rrr) & A2B_MOD2NK;
 
-    /* A = x - R mod 2^16 */
-    uint16_t R = (uint16_t)state->r[0] | ((uint16_t)state->r[1] << 8);
-    A = x + (~R + 1);
-    beta = 0;
+    for (i = 0; i < A2B_N; i++) {
+        uint32_t mask = (uint32_t)((1u << (A2B_N - i) * A2B_K) - 1);
+        R_l = R & A2B_MOD2K;
+        A = (A + R_l) & mask;
+        A_l = A & A2B_MOD2K;
 
-    /* Process from MSB to LSB: i = 1, 0
-     * At iteration i, extract the i-th chunk: (A >> (i * k)) & mask */
-    for (i = A2B_N; i > 0; i--) {
-        uint8_t idx = (uint8_t)(i - 1);
-        R_l = state->r[idx];
+        betaBi = A2B_T[A2B_INDEX(i, (uint32_t)beta, A_l)];
+        Bi     = betaBi & A2B_MOD2K;
+        beta   = betaBi >> A2B_K;
 
-        /* Extract the idx-th k-bit chunk of A */
-        uint16_t a_chunk = (A >> (idx * A2B_K)) & ((1U << A2B_K) - 1);
+        Bi = Bi ^ R_l;
+        B  |= (Bi << (i * A2B_K));
 
-        /* Table lookup: T_i[beta][a_chunk] */
-        result = state->tables[idx][beta][a_chunk];
-
-        /* Extract carry and B_i raw */
-        beta = (uint8_t)(result >> A2B_K);
-        uint16_t B_raw = result & ((1U << A2B_K) - 1);
-
-        /* Unmask */
-        Bi = B_raw ^ R_l;
-
-        b[idx] = Bi;
+        A >>= A2B_K;
+        R >>= A2B_K;
     }
+
+    return B ^ A2B_ctx.rrr;
+}
+
+static uint32_t A2B_convert(uint32_t A, uint32_t R)
+{
+    return A2B_convert_sw(A, R);
 }
 
 /* ------------------------------------------------------------------ */
-/*  Masked poly_tomsg — Barrett approximation on masked shares          */
+/*  Masked poly_tomsg (mkm4 crypto_kem/kyber768/m4/masked-poly.c)      */
 /* ------------------------------------------------------------------ */
 /*
- * Compress_q(x, 1) = round(2x/q) mod 2.
- * For Kyber q=3329:
- *   bit = 0 for x in [0, 832] U [2497, 3328]
- *   bit = 1 for x in [833, 2496]
+ * For each coefficient of the two arithmetic shares (a->coeffs[0]=a1,
+ * a->coeffs[1]=a2), a1 + a2 = x mod q. The bit Compress_q(x, 1) is
+ * recovered from the Boolean shares WITHOUT reconstructing x:
  *
- * Computes x = x1 + x2 (mod q) from the arithmetic shares, then
- * applies the same Barrett-approximation as poly_tomsg().
+ *   1. a1 <- a1 - q/4 (mod q)     (threshold shift on share 0 only)
+ *   2. OSFP18 transform: mod-q shares -> mod-2^16 shares (no rejection)
+ *   3. c0  <- c0 - q/2           (threshold shift on share 0 only)
+ *   4. A2B of the mod-2^16 share, take the MSB (bit 15) of each share
  *
- * Security note: x = v - s^T * b is an intermediate value in decryption,
- * not the secret key s. Reconstructing x for the public output does not
- * compromise the secret key. The secret key s is never reconstructed
- * during the masked dot product (s1, s2 are kept separate throughout).
- *
- * The BDV21 A2B conversion (a2b_generate_tables, a2b_convert_16bit) is
- * implemented above but not used here — it was developed for first-order
- * masking of the compression step but does not produce correct output
- * for Kyber's Compress_q(x,1) threshold function.
+ * Message bit = (share0 bit) XOR (share1 bit) = Compress_q(x, 1).
  */
-
 void masked_poly_tomsg(uint8_t m1[KYBER_INDCPA_MSGBYTES],
                        uint8_t m2[KYBER_INDCPA_MSGBYTES],
                        const poly *x1,
                        const poly *x2)
 {
-    unsigned int idx;
-    uint8_t msb_bit;
-    uint32_t t;
-    unsigned int j;
-    int coeff_idx;
-    int16_t x1v;
-    int16_t x2v;
-    int32_t x;
+    size_t i;         /* symbol index (0 .. MSGBYTES-1) */
+    size_t j;         /* bit index within a byte (0 .. 7) */
+    uint16_t a1;
+    uint16_t a2;
+    uint16_t random;  /* unsigned 16-bit mask (0 .. 2^16-1) */
+    uint16_t k11;
+    uint16_t k12;
+    uint16_t k21;
+    uint16_t k22;
+    uint16_t y1;
+    uint16_t y2;
+    uint16_t z0;
+    uint16_t z[2];
+    uint16_t c0;
+    uint16_t c1;
+    uint32_t tmp;
 
-    /* Fill m1, m2 with zeros */
-    for (idx = 0; idx < KYBER_INDCPA_MSGBYTES; idx++) {
-        m1[idx] = 0;
-        m2[idx] = 0;
+    for (i = 0; i < KYBER_INDCPA_MSGBYTES; i++) {
+        m1[i] = 0;
+        m2[i] = 0;
     }
 
-    /* Process all 256 coefficients — mirrors poly_tomsg() exactly */
-    for (idx = 0; idx < KYBER_N / 8; idx++) {
-        m1[idx] = 0;
-        m2[idx] = 0;
+    for (i = 0; i < KYBER_INDCPA_MSGBYTES; i++) {
         for (j = 0; j < 8; j++) {
-            coeff_idx = 8 * idx + j;
-            x1v = x1->coeffs[coeff_idx];
-            x2v = x2->coeffs[coeff_idx];
 
-            /* Compute x = x1 + x2 mod q (canonical [0, q-1]) */
-            x = (int32_t)x1v + (int32_t)x2v;
-            x %= KYBER_Q;
-            if (x < 0) x += KYBER_Q;
+            A2B_init();          /* fresh table + rrr per coefficient */
 
-            /* Exact same Barrett-approximation as poly_tomsg() */
-            t = (uint32_t)x;
-            t <<= 1;
-            t += 1665;
-            t *= 80635;
-            t >>= 28;
-            t &= 1;
-            msb_bit = (uint8_t)t;
+            a1 = (uint16_t)(((int32_t)x1->coeffs[8 * i + j] - KYBER_Q / 4 + KYBER_Q) % KYBER_Q);
+            a2 = (uint16_t)((int32_t)x2->coeffs[8 * i + j]);
 
-            m1[idx] |= msb_bit << j;
+            /* --- OSFP18 mod-q -> mod-2^16 transform --- */
+            tmp    = randomint();
+            y1     = (uint16_t)(tmp & 0xFFFFu);
+            random = (uint16_t)((tmp >> 16) & 0xFFFFu);
+
+            y2 = (uint16_t)(((uint32_t)a1 + (0xFFFFu - y1) + 1));
+            y2 = (uint16_t)(y2 + a2);
+            z0 = (uint16_t)(((uint32_t)y1 + (0xFFFFu - KYBER_Q) + 1));
+
+            z[0] = A2B_convert(z0, y2);
+            z[1] = y2;
+
+            tmp = randomint();
+            k11 = (uint16_t)(tmp & 0xFFFFu);
+            k21 = (uint16_t)((tmp >> 16) & 0xFFFFu);
+
+            k12 = (uint16_t)(((uint32_t)((uint16_t)z[0] >> 15 ^ 1u) + (0xFFFFu - k11) + 1));
+            k22 = (uint16_t)(((uint32_t)((uint16_t)z[1] >> 15)     + (0xFFFFu - k21) + 1));
+
+            c0 = (uint16_t)(((uint32_t)random + y1));
+            c0 = (uint16_t)((uint32_t)c0
+                   - (uint32_t)(((uint16_t)z[0] >> 15) ^ 1) * (uint32_t)KYBER_Q);
+            c1 = (uint16_t)((uint32_t)y2 + (0xFFFFu - random) + 1);
+            c0 = (uint16_t)((uint32_t)c0
+                   - (uint32_t)((uint16_t)z[1] >> 15) * (uint32_t)KYBER_Q);
+            /* Each 2*k*u*v*Q term kept mod 2^16 with 32-bit intermediates so no
+             * slow 64-bit multiplier is ever needed on the Cortex-M0 target. */
+            { uint16_t t = (uint16_t)(((uint32_t)((uint16_t)2 * KYBER_Q) * k11));
+              t = (uint16_t)(((uint32_t)t * k21));
+              c0 = (uint16_t)((uint32_t)c0 + t); }
+            { uint16_t t = (uint16_t)(((uint32_t)((uint16_t)2 * KYBER_Q) * k11));
+              t = (uint16_t)(((uint32_t)t * k22));
+              c0 = (uint16_t)((uint32_t)c0 + t); }
+            { uint16_t t = (uint16_t)(((uint32_t)((uint16_t)2 * KYBER_Q) * k12));
+              t = (uint16_t)(((uint32_t)t * k21));
+              c0 = (uint16_t)((uint32_t)c0 + t); }
+            { uint16_t t = (uint16_t)(((uint32_t)((uint16_t)2 * KYBER_Q) * k12));
+              t = (uint16_t)(((uint32_t)t * k22));
+              c0 = (uint16_t)((uint32_t)c0 + t); }
+            /* --- end OSFP18 transform --- */
+
+            c0 = (uint16_t)((uint32_t)c0 + (0xFFFFu - KYBER_Q / 2) + 1);
+
+            c0 = A2B_convert(c0, c1);
+
+            m1[i] += (uint8_t)(((c0 >> 15) & 1) << j);
+            m2[i] += (uint8_t)(((c1 >> 15) & 1) << j);
         }
     }
 }

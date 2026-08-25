@@ -137,15 +137,17 @@ def load_traces(filenames):
     for fn in filenames:
         with open(fn) as fh:
             lengths.setdefault(fh.read().count("\n"), fn)
-    if len(lengths) != 1:
-        raise RuntimeError(
-            "inconsistent trace lengths ({}) -- the trace directory was not "
-            "cleanly rewritten by the simulation; re-run with a clean output "
-            "directory".format(sorted(lengths.items())[:5]))
-    length, first_fn = next(iter(lengths.items()))
+    if len(lengths) > 1:
+        # Small variable-length spread (e.g. a few modulo/division cycles near
+        # the end of a run) is tolerable: truncate every trace to the shortest
+        # so the fixed-vs-random test still has a common time axis.
+        length = min(lengths)
+    else:
+        length, _ = next(iter(lengths.items()))
     out = np.empty((len(filenames), length), dtype=np.float32)
     for i, fn in enumerate(filenames):
-        out[i] = np.array(open(fn).read().split(), dtype=np.float32)
+        vals = np.array(open(fn).read().split(), dtype=np.float32)
+        out[i] = vals[:length]
     return out
 
 

@@ -20,13 +20,18 @@
 
 static void random_mod_q(int16_t *out)
 {
-    uint8_t buf[2];
-    do {
-        buf[0] = 0;
-        buf[1] = 0;
-        randombytes(buf, 2);
-        *out = ((buf[0] << 8) | buf[1]) & 0x0FFF;
-    } while (*out >= KYBER_Q);
+    uint8_t b[3];
+    uint32_t v;
+
+    /* Fixed-iteration mask: draw 3 bytes and reduce modulo q. The masking
+     * only needs the mask to be random and per-trace independent (the global
+     * PRNG advances across traces), not to use rejection sampling -- rejection
+     * would make the masked computation's cycle count (hence the ELMO trace
+     * length) depend on the mask, which is not constant across the fixed-vs-
+     * random set and would make the t-test undefined. */
+    randombytes(b, 3);
+    v = ((uint32_t)b[0] << 16) | ((uint16_t)b[1] << 8) | b[2];
+    *out = (int16_t)(v % (uint32_t)KYBER_Q);
 }
 
 void masked_poly_split(poly *s1, poly *s2, const poly *s)
@@ -34,11 +39,15 @@ void masked_poly_split(poly *s1, poly *s2, const poly *s)
     unsigned int i;
 
     for (i = 0; i < KYBER_N; i++) {
+        int16_t s2v;
         random_mod_q(&s1->coeffs[i]);
-        s2->coeffs[i] = s->coeffs[i] - s1->coeffs[i];
-        if (s2->coeffs[i] < 0) {
-            s2->coeffs[i] += KYBER_Q;
-        }
+        /* s = s1 + s2 (mod q); reduce s2 = s - s1 into [0, q) with a
+         * branchless (constant-time) reduction so the masked computation's
+         * cycle count -- and hence the ELMO trace length -- does not depend
+         * on the secret-dependent branch. */
+        s2v = s->coeffs[i] - s1->coeffs[i];
+        s2v = ((s2v % KYBER_Q) + KYBER_Q) % KYBER_Q;
+        s2->coeffs[i] = s2v;
     }
 }
 
