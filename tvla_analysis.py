@@ -543,11 +543,12 @@ def make_plots(results, args):
         ax_t2.scatter(np.where(above)[0], t2_vals[above],
                       color="#e74c3c", s=1.5, edgecolors="none", label="Above threshold")
         ax_t2.axhline(f_crit * scale, color="gray", ls="--", lw=0.8,
-                      label="T² threshold = {:.1f}".format(f_crit * scale))
+                      label="T\u00b2 threshold = {:.1e}".format(f_crit * scale))
         ax_t2.set_title("{}: {} leaking windows".format(name, r["multivariate"]))
-        ax_t2.set_ylabel("T²")
+        ax_t2.set_ylabel("T\u00b2")
         ax_t2.set_xlabel("window index")
-        ax_t2.set_ylim(0, max_t2 * 1.1)
+        ax_t2.set_yscale("symlog", linthresh=max(f_crit * scale * 1e-9, 1.0))
+        ax_t2.set_ylim(bottom=0)
         ax_t2.legend(fontsize=7)
 
     fig.tight_layout()
