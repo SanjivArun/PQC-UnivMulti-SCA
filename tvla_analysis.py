@@ -340,9 +340,16 @@ def print_joint_leak_audit(masked_result, inject_meta, args):
 def _make_summary_figure(results, args):
     """Save a summary figure that is readable without zooming or technical background.
 
-    Panel A (top): bar chart of univariate (simple test) leaks per version.
-    Panel B (bottom): bar chart of multivariate (advanced test) leaks per version.
-    Each bar goes from 0 at the bottom; 0-height bars appear as a line on the axis.
+    Panel A (top): bar chart of the *share* of univariate (simple test) items that
+    leaked, per version.
+    Panel B (bottom): bar chart of the *share* of multivariate (advanced test)
+    windows that leaked, per version.
+
+    Bars are normalized to a percentage of the total items tested so that the two
+    versions are fairly comparable (they have very different denominators -- e.g.
+    1.35M vs 18.8M univariate items). A shorter bar always means less leakage, so
+    masking reads as "better" in both panels. Raw counts are shown as a secondary
+    label on/above each bar.
     """
     import matplotlib
     matplotlib.use("Agg")
@@ -355,9 +362,10 @@ def _make_summary_figure(results, args):
 
     order_label = "second-order" if args.order == 2 else "first-order"
 
-    # ---- Panel A: leaked features/points ----
+    # ---- Panel A: univariate (simple test) -- share of items that leaked ----
     ax = axes[0]
-    all_uni = [r["univariate"] for r in results.values()]
+    all_uni = [r["univariate"] / max(r["t_stats"].shape[0], 1) * 100
+               for r in results.values()]
     max_uni = max(all_uni) if all_uni else 1
     barbox = dict(facecolor="white", edgecolor="none", alpha=0.85, pad=1)
     for i, name in enumerate(versions):
@@ -365,52 +373,48 @@ def _make_summary_figure(results, args):
         n_total = r["t_stats"].shape[0]
         leaked = r["univariate"]
         pct = leaked / n_total * 100 if n_total > 0 else 0
-        yval = leaked
-        ax.bar(name, yval, color=colors[i], width=0.5, edgecolor="white", linewidth=0.5)
-        label = "{:,} of {:,}\n({:.1f}%)\n-- {} --".format(
-            int(leaked), n_total, pct, "LEAKING" if leaked > 0 else "SAFE")
-        if yval > max_uni * 0.25:
-            ax.text(i, yval / 2, label, ha="center", va="center", fontsize=8,
+        ax.bar(name, pct, color=colors[i], width=0.5, edgecolor="white", linewidth=0.5)
+        label = "{:.1f}%\n{:,} of {:,}".format(pct, int(leaked), n_total)
+        if pct > max_uni * 0.25:
+            ax.text(i, pct / 2, label, ha="center", va="center", fontsize=8,
                     color="white", fontweight="bold")
         else:
-            ax.text(i, yval + max_uni * 0.03, label, ha="center", va="bottom", fontsize=7,
+            ax.text(i, pct + max_uni * 0.03, label, ha="center", va="bottom", fontsize=7,
                     color="#333333", fontweight="bold", bbox=barbox, zorder=10)
-    ymax_a = max(max_uni * 1.12, 1)
+    ymax_a = max(max_uni * 1.15, 1)
     ax.set_ylim(-ymax_a * 0.02, ymax_a)
+    ax.set_ylabel("Share leaked (%)")
     if args.order == 2:
-        ax.set_ylabel("Leaked trace features")
-        ax.set_title("How many trace features leaked? (simple univariate test)")
+        ax.set_title("What share of trace features leaked? (simple univariate test)")
     else:
-        ax.set_ylabel("Leaked trace points")
-        ax.set_title("How many individual trace points leaked? (simple test)")
+        ax.set_title("What share of trace points leaked? (simple test)")
 
-    # ---- Panel B: leaked windows ----
+    # ---- Panel B: multivariate (advanced test) -- share of windows that leaked ----
     ax = axes[1]
-    max_windows = max(r["n_windows"] for r in results.values())
-    all_mv = [r["multivariate"] for r in results.values()]
+    all_mv = [r["multivariate"] / max(r["n_windows"], 1) * 100
+              for r in results.values()]
     max_mv = max(all_mv) if all_mv else 1
     for i, name in enumerate(versions):
         r = results[name]
         leaked = r["multivariate"]
         total_w = r["n_windows"]
         pct = leaked / total_w * 100 if total_w > 0 else 0
-        ax.bar(name, leaked, color=colors[i], width=0.5, edgecolor="white", linewidth=0.5)
-        label = "{:,} of {:,}\n({:.1f}%)\n-- {} --".format(
-            int(leaked), total_w, pct, "LEAKING" if leaked > 0 else "SAFE")
-        if leaked > max_mv * 0.25:
-            ax.text(i, leaked / 2, label, ha="center", va="center", fontsize=8,
+        ax.bar(name, pct, color=colors[i], width=0.5, edgecolor="white", linewidth=0.5)
+        label = "{:.1f}%\n{:,} of {:,}".format(pct, int(leaked), total_w)
+        if pct > max_mv * 0.25:
+            ax.text(i, pct / 2, label, ha="center", va="center", fontsize=8,
                     color="white", fontweight="bold")
         else:
-            ax.text(i, leaked + max_mv * 0.03, label, ha="center", va="bottom", fontsize=7,
+            ax.text(i, pct + max_mv * 0.03, label, ha="center", va="bottom", fontsize=7,
                     color="#333333", fontweight="bold", bbox=barbox, zorder=10)
-    ymax_b = max(max_mv * 1.12, 1)
+    ymax_b = max(max_mv * 1.15, 1)
     ax.set_ylim(-ymax_b * 0.02, ymax_b)
-    ax.set_ylabel("Leaked windows")
+    ax.set_ylabel("Share leaked (%)")
     ax.set_xlabel("")
     if args.order == 2:
-        ax.set_title("How many trace windows leaked? (advanced multivariate test)")
+        ax.set_title("What share of trace windows leaked? (advanced multivariate test)")
     else:
-        ax.set_title("How many trace windows leaked? (advanced test)")
+        ax.set_title("What share of trace windows leaked? (advanced test)")
 
     if args.order == 2:
         fig.suptitle(
