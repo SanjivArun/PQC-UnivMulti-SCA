@@ -338,8 +338,8 @@ def preprocess_second_order_traces(group0, group1, window_size=10):
         - To reduce memory: decrease window_size (fewer features per window) or
           increase window_size (fewer windows) at the cost of temporal resolution.
     """
-    a = np.asarray(group0, dtype=np.float64)
-    b = np.asarray(group1, dtype=np.float64)
+    a = np.asarray(group0, dtype=np.float32)
+    b = np.asarray(group1, dtype=np.float32)
     n0, p0 = a.shape
     n1, p1 = b.shape
     if p0 != p1:
@@ -358,8 +358,8 @@ def preprocess_second_order_traces(group0, group1, window_size=10):
     # array in memory at once -- we build the output column-by-column.
     n_windows = p0 // window_size
     features_per_window = window_size * (window_size + 1) // 2
-    f0 = np.empty((n0, n_windows * features_per_window), dtype=np.float64)
-    f1 = np.empty((n1, n_windows * features_per_window), dtype=np.float64)
+    f0 = np.empty((n0, n_windows * features_per_window), dtype=np.float32)
+    f1 = np.empty((n1, n_windows * features_per_window), dtype=np.float32)
 
     row_idx, col_idx = _extract_upper_triangular_indices(window_size)
 
@@ -376,6 +376,7 @@ def preprocess_second_order_traces(group0, group1, window_size=10):
         f1[:, w * features_per_window:(w + 1) * features_per_window] = \
             w1[:, row_idx] * w1[:, col_idx]
 
+    del a_centered, b_centered
     return f0, f1
 
 

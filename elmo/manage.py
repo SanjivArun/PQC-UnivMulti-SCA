@@ -239,6 +239,16 @@ def execute_simulation(project):
             if res:
                 nb_instructions = res.group(1)
 
+    # ELMO's stdout can be truncated/corrupted by a benign ARM-emulator
+    # null-deref diagnostic (the masked binary triggers it), so the 'TRACE NO'
+    # count can read 0 even though every trace file was written. The files on
+    # disk are the reliable source of truth for how many traces ran.
+    traces_dir = pjoin(elmo_path, 'output', 'traces')
+    if not nb_traces and os.path.isdir(traces_dir):
+        nb_traces = len(
+            [name for name in os.listdir(traces_dir)
+             if name.endswith('.trc')]) or None
+
     # Return results
     return {
         'nb_traces': nb_traces,

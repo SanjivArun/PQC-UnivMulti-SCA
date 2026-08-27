@@ -113,12 +113,19 @@ def run_simulation(classname, challenges, verbose=False):
     res = simulation.run()
     err = res.get("error") or ""
     # ELMO emits benign ARM-emu stack diagnostics ("push {lr} ... popped 0x")
-    # on stderr; they don't stop trace generation, so ignore unless traces
-    # failed to be produced.
+    # on stderr; the masked binary additionally triggers a null-deref diagnostic
+    # that corrupts the stdout pipe (so nb_traces may parse as 0). None of this
+    # stops trace generation, so ignore the error unless no trace was actually
+    # produced on disk.
     real_err = "\n".join(
         line for line in err.splitlines() if "push {lr}" not in line
     ).strip()
-    if real_err or not res.get("nb_traces"):
+    traces_dir = os.path.join(ELMO_TOOL_DIR, "output", "traces")
+    n_on_disk = 0
+    if os.path.isdir(traces_dir):
+        n_on_disk = len([name for name in os.listdir(traces_dir)
+                         if name.endswith(".trc")])
+    if (real_err or not res.get("nb_traces")) and n_on_disk == 0:
         raise RuntimeError("ELMO run failed ({}): {}".format(
             classname, err or "(no traces produced)"))
     if verbose:

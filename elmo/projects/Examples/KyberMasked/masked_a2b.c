@@ -180,7 +180,15 @@ void masked_poly_tomsg(uint8_t m1[KYBER_INDCPA_MSGBYTES],
 
             A2B_init();          /* fresh table + rrr per coefficient */
 
-            a1 = (uint16_t)(((int32_t)x1->coeffs[8 * i + j] - KYBER_Q / 4 + KYBER_Q) % KYBER_Q);
+            /* Constant-time mod-q reduction (no division): the value
+             * x - q/4 + q lies in [-q/4, 3q/2], so one conditional
+             * subtraction yields the result in [0, q). Using % would
+             * call __aeabi_idivmod, whose iteration count depends on
+             * the dividend, making the ELMO trace length data-dependent. */
+            int32_t a1v = (int32_t)x1->coeffs[8 * i + j] - KYBER_Q / 4 + KYBER_Q;
+            if (a1v >= KYBER_Q) a1v -= KYBER_Q;
+            if (a1v < 0) a1v += KYBER_Q;
+            a1 = (uint16_t)a1v;
             a2 = (uint16_t)((int32_t)x2->coeffs[8 * i + j]);
 
             /* --- OSFP18 mod-q -> mod-2^16 transform --- */

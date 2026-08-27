@@ -25,7 +25,7 @@ int main(void) {
   uint16_t k;
   uint16_t i;
   uint16_t u16;
-  polyvec s;
+  static polyvec s;
 
   read2bytes(&nb_challenges);
 
