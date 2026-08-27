@@ -36,6 +36,7 @@ Full options: ``python3 tvla_analysis.py --help``.
 import argparse
 import os
 import re
+import shutil
 import subprocess
 
 import numpy as np
@@ -96,12 +97,16 @@ def clean_output_traces():
     so traces from the previous version (or from an earlier run) must be removed
     before the next simulation: a stale trace that is not overwritten by ELMO
     would otherwise be silently mixed into the new trace set.
+
+    Uses ``shutil.rmtree`` + ``os.makedirs`` to guarantee complete removal
+    (the per-file ``os.remove`` approach occasionally left stale masked traces
+    behind on macOS APFS).
     """
     for folder in ("traces", "nonprofiledindexes", "asmoutput"):
         path = os.path.join(ELMO_TOOL_DIR, "output", folder)
         if os.path.isdir(path):
-            for name in os.listdir(path):
-                os.remove(os.path.join(path, name))
+            shutil.rmtree(path)
+        os.makedirs(path, exist_ok=True)
 
 
 def run_simulation(classname, challenges, verbose=False):
@@ -153,7 +158,10 @@ def load_traces(filenames):
         length, _ = next(iter(lengths.items()))
     out = np.empty((len(filenames), length), dtype=np.float32)
     for i, fn in enumerate(filenames):
-        vals = np.array(open(fn).read().split(), dtype=np.float32)
+        # Read in binary mode and strip NULL bytes: ELMO's null-deref
+        # corruption can leave trailing \x00 in otherwise-valid trace files.
+        data = open(fn, 'rb').read().replace(b'\x00', b'')
+        vals = np.array(data.split(), dtype=np.float32)
         out[i] = vals[:length]
     return out
 
