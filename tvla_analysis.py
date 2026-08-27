@@ -348,7 +348,7 @@ def _make_summary_figure(results, args):
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    fig, axes = plt.subplots(2, 1, figsize=(10, 5), sharex=False)
+    fig, axes = plt.subplots(2, 1, figsize=(10, 6), sharex=False)
 
     versions = ["unmasked", "masked"]
     colors = ["#c0392b", "#27ae60"]
@@ -357,6 +357,9 @@ def _make_summary_figure(results, args):
 
     # ---- Panel A: leaked features/points ----
     ax = axes[0]
+    all_uni = [r["univariate"] for r in results.values()]
+    max_uni = max(all_uni) if all_uni else 1
+    barbox = dict(facecolor="white", edgecolor="none", alpha=0.85, pad=1)
     for i, name in enumerate(versions):
         r = results[name]
         n_total = r["t_stats"].shape[0]
@@ -364,11 +367,16 @@ def _make_summary_figure(results, args):
         pct = leaked / n_total * 100 if n_total > 0 else 0
         yval = leaked
         ax.bar(name, yval, color=colors[i], width=0.5, edgecolor="white", linewidth=0.5)
-        ax.text(i, yval / 2,
-                "{:,} of {:,}\n({:.1f}%)\n-- {} --".format(
-                    int(leaked), n_total, pct, "LEAKING" if leaked > 0 else "SAFE"),
-                ha="center", va="center", fontsize=8, color="white" if leaked > 0 else "black", fontweight="bold")
-    ax.set_ylim(0, None)
+        label = "{:,} of {:,}\n({:.1f}%)\n-- {} --".format(
+            int(leaked), n_total, pct, "LEAKING" if leaked > 0 else "SAFE")
+        if yval > max_uni * 0.25:
+            ax.text(i, yval / 2, label, ha="center", va="center", fontsize=8,
+                    color="white", fontweight="bold")
+        else:
+            ax.text(i, yval + max_uni * 0.03, label, ha="center", va="bottom", fontsize=7,
+                    color="#333333", fontweight="bold", bbox=barbox, zorder=10)
+    ymax_a = max(max_uni * 1.12, 1)
+    ax.set_ylim(-ymax_a * 0.02, ymax_a)
     if args.order == 2:
         ax.set_ylabel("Leaked trace features")
         ax.set_title("How many trace features leaked? (simple univariate test)")
@@ -379,18 +387,24 @@ def _make_summary_figure(results, args):
     # ---- Panel B: leaked windows ----
     ax = axes[1]
     max_windows = max(r["n_windows"] for r in results.values())
+    all_mv = [r["multivariate"] for r in results.values()]
+    max_mv = max(all_mv) if all_mv else 1
     for i, name in enumerate(versions):
         r = results[name]
         leaked = r["multivariate"]
         total_w = r["n_windows"]
         pct = leaked / total_w * 100 if total_w > 0 else 0
         ax.bar(name, leaked, color=colors[i], width=0.5, edgecolor="white", linewidth=0.5)
-        ax.text(i, leaked / 2 if leaked > 0 else max_windows * 0.05,
-                "{:,} of {:,}\n({:.1f}%)\n-- {} --".format(
-                    int(leaked), total_w, pct, "LEAKING" if leaked > 0 else "SAFE"),
-                ha="center", va="center", fontsize=8,
-                color="white" if leaked > 0 else "black", fontweight="bold")
-    ax.set_ylim(0, None)
+        label = "{:,} of {:,}\n({:.1f}%)\n-- {} --".format(
+            int(leaked), total_w, pct, "LEAKING" if leaked > 0 else "SAFE")
+        if leaked > max_mv * 0.25:
+            ax.text(i, leaked / 2, label, ha="center", va="center", fontsize=8,
+                    color="white", fontweight="bold")
+        else:
+            ax.text(i, leaked + max_mv * 0.03, label, ha="center", va="bottom", fontsize=7,
+                    color="#333333", fontweight="bold", bbox=barbox, zorder=10)
+    ymax_b = max(max_mv * 1.12, 1)
+    ax.set_ylim(-ymax_b * 0.02, ymax_b)
     ax.set_ylabel("Leaked windows")
     ax.set_xlabel("")
     if args.order == 2:
@@ -530,8 +544,7 @@ def make_plots(results, args):
         n1 = args.nb_fixed
         nu = n0 + n1 - d - 1
         scale = (n0 + n1 - 2) * d / nu if nu > 0 else 1.0
-        f_crit = tvla.f_critical(d, nu - d + 1 if nu - d + 1 > 0 else 1,
-                                 tvla.DEFAULT_ALPHA)
+        f_crit = tvla.f_critical(d, nu, tvla.DEFAULT_ALPHA)
         f_obs = t2_vals / scale
 
         below = f_obs < f_crit
@@ -773,8 +786,7 @@ def main():
                     scale = (n0 + n1 - 2) * d / nu
                 else:
                     scale = 1.0
-                f_crit = tvla.f_critical(d, nu - d + 1 if nu - d + 1 > 0 else 1,
-                                         tvla.DEFAULT_ALPHA)
+                f_crit = tvla.f_critical(d, nu, tvla.DEFAULT_ALPHA)
                 t2_threshold = f_crit * scale
 
                 t_stats_label = "Welch |t|"
