@@ -437,7 +437,13 @@ def _make_table_figure(results, args):
     """Save a compact table summarising leakage detection results.
 
     4 rows: unmasked/masked × univariate/multivariate.
-    Columns: Implementation, Method, Statistical Test, Threshold, Detected Leakage.
+    Columns: Implementation, Method, Statistical Test, Threshold, Detected Leakages,
+    Detected %.
+
+    The "Detected Leakages" column shows the count of detected leakage as a fraction
+    of the total items tested ("detected / total"), and the "Detected %" column gives
+    the same as a percentage -- the fair, comparable metric across versions (which have
+    very different totals to test).
     """
     import matplotlib.pyplot as plt
     from matplotlib.font_manager import FontProperties
@@ -451,9 +457,12 @@ def _make_table_figure(results, args):
         # Univariate row
         uni_label = "Welch's t-test"
         uni_thresh = "|t| > {:.2f}".format(threshold)
-        uni_leak = "{:,} features".format(r["univariate"])
+        uni_total = r["t_stats"].shape[0]
+        uni_leak = "{:,} / {:,}".format(r["univariate"], uni_total)
+        uni_pct = r["univariate"] / uni_total * 100 if uni_total > 0 else 0
+        uni_pct_str = "{:.1f}%".format(uni_pct)
         method = "Univariate"
-        rows_data.append((name, method, uni_label, uni_thresh, uni_leak))
+        rows_data.append((name, method, uni_label, uni_thresh, uni_leak, uni_pct_str))
 
         # Multivariate row
         mv_label = "Hotelling's T\u00b2"
@@ -462,20 +471,24 @@ def _make_table_figure(results, args):
         d = args.second_order_window_size * (args.second_order_window_size + 1) // 2 if order2 else args.window_size
         alpha_str = "{:.3e}".format(alpha)
         mv_thresh = "\u03b1 = {}".format(alpha_str)
-        mv_leak = "{:,} windows (of {:,})".format(r["multivariate"], r["n_windows"])
+        mv_total = r["n_windows"]
+        mv_leak = "{:,} / {:,}".format(r["multivariate"], mv_total)
+        mv_pct = r["multivariate"] / mv_total * 100 if mv_total > 0 else 0
+        mv_pct_str = "{:.1f}%".format(mv_pct)
         method = "Multivariate"
-        rows_data.append((name, method, mv_label, mv_thresh, mv_leak))
+        rows_data.append((name, method, mv_label, mv_thresh, mv_leak, mv_pct_str))
 
-    col_labels = ["Implementation", "Method", "Statistical Test", "Threshold", "Detected Leakage"]
+    col_labels = ["Implementation", "Method", "Statistical Test", "Threshold",
+                  "Detected Leakages", "Detected %"]
     num_rows = len(rows_data) + 1
     row_colors = ["#f5f5f5", "#ffffff"] * 10
 
     grid = [col_labels] + [[cell for cell in row] for row in rows_data]
 
-    fig, ax = plt.subplots(figsize=(10, 3))
+    fig, ax = plt.subplots(figsize=(11, 3))
     ax.axis("off")
 
-    col_widths = [0.14, 0.14, 0.22, 0.18, 0.32]
+    col_widths = [0.13, 0.12, 0.15, 0.17, 0.28, 0.15]
     table = ax.table(cellText=grid, cellLoc="center", colWidths=col_widths, loc="center")
     table.auto_set_font_size(False)
 
@@ -493,12 +506,12 @@ def _make_table_figure(results, args):
             cell.set_facecolor(row_colors[r - 1])
             if c == 0:
                 cell.set_text_props(fontweight="bold")
-            if c == 4:
+            if c in (4, 5):
                 cell.set_text_props(fontweight="bold")
         cell.set_edgecolor("#cccccc")
         cell.set_linewidth(0.5)
 
-    fig.subplots_adjust(left=0.04, right=0.96, top=0.88, bottom=0.1)
+    fig.subplots_adjust(left=0.02, right=0.98, top=0.88, bottom=0.1)
     return fig
 
 
