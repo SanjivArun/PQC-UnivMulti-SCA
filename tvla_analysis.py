@@ -515,7 +515,72 @@ def _make_table_figure(results, args):
     return fig
 
 
-def make_plots(results, args):
+def _make_simple_table_figure(results, args):
+    """Save a compact 6-column table for the common layman.
+
+    Columns: Type of dataset, Method, Statistical Test, Threshold, Traces/Group,
+    Trace Length -- one row per dataset x method pairing.
+
+    "Traces/Group" is the number of traces in each fixed/random group (balanced
+    fixed-vs-random, so nb_fixed == nb_random). "Trace Length" is the number of
+    time points in each trace. Both tests (univariate/multivariate) run on the
+    same traces, so the two rows of a dataset share the same trace length.
+    """
+    import matplotlib.pyplot as plt
+    from matplotlib.font_manager import FontProperties
+
+    threshold = tvla.DEFAULT_TVLA_THRESHOLD
+    alpha = tvla.DEFAULT_ALPHA
+    traces_per_group = args.nb_fixed  # balanced design: nb_fixed == nb_random
+
+    rows_data = []
+    for name, r in results.items():
+        trace_len = r.get("trace_length", 0)
+        rows_data.append((
+            name, "Univariate", "Welch's t-test",
+            "|t| > {:.2f}".format(threshold),
+            "{:,}".format(traces_per_group), "{:,}".format(trace_len)))
+        rows_data.append((
+            name, "Multivariate", "Hotelling's T\u00b2",
+            "\u03b1 = {:.3e}".format(alpha),
+            "{:,}".format(traces_per_group), "{:,}".format(trace_len)))
+
+    col_labels = ["Type of dataset", "Method", "Statistical Test", "Threshold",
+                  "Traces/Group", "Trace Length"]
+    row_colors = ["#f5f5f5", "#ffffff"] * 10
+
+    grid = [col_labels] + [list(row) for row in rows_data]
+
+    fig, ax = plt.subplots(figsize=(12, 3))
+    ax.axis("off")
+
+    col_widths = [0.12, 0.12, 0.16, 0.18, 0.16, 0.26]
+    table = ax.table(cellText=grid, cellLoc="center", colWidths=col_widths,
+                     loc="center")
+    table.auto_set_font_size(False)
+
+    cell_h = 0.16
+    bold_font = FontProperties(weight="bold")
+    normal_font = FontProperties()
+    for (r, c), cell in table.get_celld().items():
+        cell.set_height(cell_h)
+        cell.set_text_props(fontproperties=normal_font, fontsize=9)
+        if r == 0:
+            cell.set_text_props(fontproperties=bold_font, fontsize=9.5, color="white")
+            cell.set_facecolor("#2c3e50")
+            cell.set_height(cell_h * 1.15)
+        else:
+            cell.set_facecolor(row_colors[r - 1])
+            if c == 0:
+                cell.set_text_props(fontweight="bold")
+        cell.set_edgecolor("#cccccc")
+        cell.set_linewidth(0.5)
+
+    fig.subplots_adjust(left=0.02, right=0.98, top=0.88, bottom=0.1)
+    return fig
+
+
+def make_plots(results, args): # Makes graphs of the TVLA results for each version, and saves them to disk.
     """Save the technical detail plot (|t| per point/feature + T² per window)."""
     try:
         import matplotlib
@@ -601,6 +666,13 @@ def make_plots(results, args):
         plt.close(table_fig)
         print("Saved table to {}".format(table_out))
 
+        # Save the compact 6-column methods/coverage table
+        simple_fig = _make_simple_table_figure(results, args)
+        simple_out = os.path.join(REPO_ROOT, "tvla_table_simple.png")
+        simple_fig.savefig(simple_out, dpi=150)
+        plt.close(simple_fig)
+        print("Saved table to {}".format(simple_out))
+
 
 # --------------------------------------------------------------------------
 # Main
@@ -683,6 +755,7 @@ def main():
                 "t2": t2,
                 "n_singular": n_singular,
                 "n_windows": t2.shape[0],
+                "trace_length": trace_length,
                 "order": 1,
             }
             print("  ground truth: {} | univariate: {} | multivariate: {}"
@@ -767,6 +840,7 @@ def main():
                 "n_windows": t2.shape[0],
                 "n_features": t_stats.shape[0],
                 "f_crit": f_crit_val,
+                "trace_length": trace_length,
                 "order": 2,
             }
 
